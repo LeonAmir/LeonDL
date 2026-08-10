@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LeonDL</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main class="panel">
+    <header class="brand">
+      <div class="mark" aria-hidden="true"><span>L</span><b>↓</b></div>
+      <div>
+        <h1>LeonDL</h1>
+        <p id="connection">Checking connection…</p>
+      </div>
+    </header>
+
+    <section class="page-card">
+      <div class="eyebrow">CURRENT PAGE</div>
+      <div id="pageTitle" class="title">Loading…</div>
+      <div id="pageUrl" class="url"></div>
+    </section>
+
+    <label class="toggle-row">
+      <input id="sendCookies" type="checkbox">
+      <span>
+        <strong>Send site cookies</strong>
+        <small>Only cookies matching this page's domain are sent and stored locally.</small>
+      </span>
+    </label>
+
+    <section id="pairingPanel" class="pairing hidden">
+      <label for="pairingToken">Pairing code from LeonDL</label>
+      <div class="pair-row">
+        <input id="pairingToken" type="password" autocomplete="off" spellcheck="false" placeholder="Paste pairing code">
+        <button id="savePairing" class="secondary">Save</button>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="sendOpen" class="primary">Send to Leon</button>
+      <button id="sendQueue" class="secondary">Add to Queue</button>
+    </div>
+
+    <div id="status" class="status" role="status"></div>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Build artifacts
+dist/
+build/
+*.exe
+*.msi
+*.spec
+
+# Secrets & local data
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+cookies*.txt
+*.log
+!*.log.example
+
+# IDE / editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Runtime / user data
+downloads/
+data/
+temp/
+
+# Internal developer documentation (not published)
+AI_DEVELOPER_GUIDE.md
