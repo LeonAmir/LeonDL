@@ -1,4 +1,4 @@
-# LeonDL — v2.6.2
+# LeonDL — v2.6.3
 
 [فارسی](README.fa.md) | **English**
 
@@ -34,7 +34,7 @@ A multi-service, bilingual desktop downloader for **yt-dlp**, built with **PySid
 2. Double-click `LeonDL.vbs` — the app runs without a visible CMD window.
 3. On first run, `.venv` and the core packages are prepared automatically; auxiliary tools (FFmpeg, etc.) are installed later from the Packages and Tools section.
 
-> **Windows EXE build (recommended for end users):** extract the ZIP and run `LeonDL-2.6.2.exe` directly — no source launch or `.bat`/`.vbs` step. On first run the EXE checks FFmpeg/FFprobe and Deno and installs any missing tool automatically in the background.
+> **Windows EXE build (recommended for end users):** extract the ZIP and run `LeonDL-2.6.3.exe` directly — no source launch or `.bat`/`.vbs` step. On first run the EXE checks FFmpeg/FFprobe and Deno and installs any missing tool automatically in the background.
 
 Helper files:
 

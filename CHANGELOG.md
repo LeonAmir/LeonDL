@@ -2,6 +2,17 @@
 
 All notable Leon Downloader changes are recorded here. The technical architecture and current behavior belong in `AI_DEVELOPER_GUIDE.md`; release history must not be duplicated there.
 
+## 2.6.3 — 2026-08-10
+
+### Added
+
+- **In-app update from GitHub Releases** (Settings → Update tab). The app silently checks `LeonAmir/LeonDL` for a newer published release at startup (EXE builds only), compares versions, and lets the user download and install the Windows build in one step with full SHA-256 verification (GitHub's per-asset digest). Applying waits for the app to exit, replaces the main and native-host executables beside the EXE, refreshes the bundled docs/extension and relaunches automatically. Source runs can check but update via `git pull`.
+- MIT license (repository is now public on GitHub).
+
+### Changed
+
+- The internal developer guide is no longer shipped or published — release folders/ZIPs contain README, CHANGELOG, VERSION and LICENSE only.
+
 ## 2.6.2 — 2026-08-09
 
 ### Changed

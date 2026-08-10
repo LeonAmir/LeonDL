@@ -34,7 +34,7 @@ STAGING_DIR_NAME = "_update_staging"
 APPLIER_VBS_NAME = "apply_update.vbs"
 APPLIER_MARKER_NAME = "apply_update.marker"
 APPLY_LOG_NAME = "_update_log.txt"
-FALLBACK_VERSION = "2.6.2"
+FALLBACK_VERSION = "2.6.3"
 
 
 class UpdaterError(RuntimeError):

@@ -681,7 +681,7 @@ class TitleBar(QFrame):
         title_box.addWidget(self.title_label)
         title_box.addWidget(self.subtitle_label)
 
-        self.version_badge = QLabel("2.6.2")
+        self.version_badge = QLabel("2.6.3")
         self.version_badge.setObjectName("versionBadge")
         self.version_badge.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
