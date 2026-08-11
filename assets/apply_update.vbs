@@ -93,10 +93,12 @@ Sub Apply()
     If NATIVE_OLD <> "" Then WaitForExit NATIVE_OLD, 30
 
     ' 2. Replace the main EXE (running EXE is unlocked once the process exits).
+    '    The OLD exe lives in RELEASE_DIR (not in staging) — it must be
+    '    renamed away so the new build fully replaces it and no duplicate
+    '    file is left behind.
     srcPath = STAGING_DIR & "\" & MAIN_NEW
-    dstPath = RELEASE_DIR & "\" & MAIN_OLD
-    If fso.FileExists(STAGING_DIR & "\" & MAIN_OLD) Then
-        fso.MoveFile STAGING_DIR & "\" & MAIN_OLD, dstPath & ".old"
+    If fso.FileExists(RELEASE_DIR & "\" & MAIN_OLD) Then
+        fso.MoveFile RELEASE_DIR & "\" & MAIN_OLD, RELEASE_DIR & "\" & MAIN_OLD & ".old"
         LogLine "renamed old main -> " & MAIN_OLD & ".old"
     End If
     If fso.FileExists(srcPath) Then
@@ -106,8 +108,8 @@ Sub Apply()
 
     ' 3. Replace the native host EXE.
     srcPath = STAGING_DIR & "\" & NATIVE_NEW
-    If fso.FileExists(STAGING_DIR & "\" & NATIVE_OLD) Then
-        fso.MoveFile STAGING_DIR & "\" & NATIVE_OLD, RELEASE_DIR & "\" & NATIVE_OLD & ".old"
+    If fso.FileExists(RELEASE_DIR & "\" & NATIVE_OLD) Then
+        fso.MoveFile RELEASE_DIR & "\" & NATIVE_OLD, RELEASE_DIR & "\" & NATIVE_OLD & ".old"
         LogLine "renamed old native -> " & NATIVE_OLD & ".old"
     End If
     If fso.FileExists(srcPath) Then

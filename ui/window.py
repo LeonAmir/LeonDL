@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -124,7 +125,7 @@ from ui.widgets import (
 )
 
 APP_NAME = "LeonDL"
-APP_VERSION = "2.6.4"
+APP_VERSION = "2.6.5"
 
 AUTH_CHOICES = {
     "none": ("بدون کوکی", "No cookies"),
@@ -470,6 +471,12 @@ class MainWindow(QMainWindow):
         if getattr(sys, "frozen", False):
             QTimer.singleShot(4500, self._silent_update_check)
 
+        self._last_clipboard_text = ""
+        self.clipboard_timer = QTimer(self)
+        self.clipboard_timer.setInterval(1500)
+        self.clipboard_timer.timeout.connect(self._poll_clipboard_for_links)
+        self.clipboard_timer.start()
+
         if yt_dlp is None:
             QTimer.singleShot(350, self._show_missing_dependency)
 
@@ -566,6 +573,7 @@ class MainWindow(QMainWindow):
         root_layout.addWidget(self.surface)
 
         self.title_bar = TitleBar(self, self.language)
+        self.title_bar.update_requested.connect(self._run_update_download)
         self.title_bar.theme_requested.connect(self._show_theme_menu)
         self.title_bar.language_requested.connect(self._show_language_menu)
         surface_layout.addWidget(self.title_bar)
@@ -825,23 +833,23 @@ class MainWindow(QMainWindow):
         card.setObjectName("sectionCard")
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(15, 13, 15, 13)
-        card_layout.setSpacing(8)
-        card_layout.addWidget(self._title(self._t("بروزرسانی از GitHub")))
-        card_layout.addWidget(
-            self._muted(
-                self._t(
-                    "بروزرسانی فقط برای نسخهٔ EXE در دسترس است؛ برنامه هنگام شروع به‌صورت بی‌صدا آخرین نسخه را بررسی می‌کند و دانلود از ریلیز رسمی GitHub انجام می‌شود."
-                )
-            )
-        )
+        card_layout.setSpacing(10)
 
-        current = read_current_version()
-        self.update_status_label = ResponsiveLabel(
-            self._t("نسخه فعلی") + f": {current}\n" + self._t("آخرین نسخه") + ": —"
-        )
+        status_row = QHBoxLayout()
+        status_row.setSpacing(8)
+        self.update_status_dot = QLabel("●")
+        self.update_status_dot.setFixedSize(12, 12)
+        self.update_status_dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.update_status_label = ResponsiveLabel(self._t("برنامه بروز است"))
         self.update_status_label.setObjectName("muted")
-        self.update_status_label.setWordWrap(True)
-        card_layout.addWidget(self.update_status_label)
+        status_row.addWidget(self.update_status_dot)
+        status_row.addWidget(self.update_status_label, 1)
+        card_layout.addLayout(status_row)
+
+        self.update_versions_label = self._muted(
+            self._t("نسخه فعلی") + f": {read_current_version()}  |  " + self._t("آخرین نسخه") + ": —"
+        )
+        card_layout.addWidget(self.update_versions_label)
 
         self.update_progress = QProgressBar()
         self.update_progress.setRange(0, 100)
@@ -849,24 +857,24 @@ class MainWindow(QMainWindow):
         self.update_progress.setTextVisible(True)
         self.update_progress.setVisible(False)
         self.update_progress.setObjectName("updateProgress")
+        self.update_progress.setFixedHeight(6)
         card_layout.addWidget(self.update_progress)
 
+        buttons_row = QHBoxLayout()
+        buttons_row.setSpacing(10)
         self.update_check_button = QPushButton(self._t("بررسی بروزرسانی"))
         self.update_check_button.clicked.connect(lambda: self._run_update_check(manual=True))
         self.update_install_button = QPushButton(self._t("دانلود و نصب"))
         self.update_install_button.setEnabled(False)
         self.update_install_button.clicked.connect(self._run_update_download)
-        buttons_row = QHBoxLayout()
-        buttons_row.setSpacing(10)
         buttons_row.addWidget(self.update_check_button)
         buttons_row.addWidget(self.update_install_button)
+        buttons_row.addStretch(1)
         card_layout.addLayout(buttons_row)
 
         if not getattr(sys, "frozen", False):
             card_layout.addWidget(
-                self._muted(
-                    self._t("در حالت اجرا از سورس فقط بررسی ممکن است؛ برای به‌روزرسانی از git pull استفاده کن.")
-                )
+                self._muted(self._t("در حالت اجرا از سورس فقط بررسی ممکن است؛ برای بروزرسانی از git pull استفاده کن."))
             )
 
         layout.addWidget(card)
@@ -882,7 +890,7 @@ class MainWindow(QMainWindow):
         if self.update_download_worker and self.update_download_worker.isRunning():
             return
         self.latest_release = None
-        self._update_status(self._t("در حال بررسی…"))
+        self._update_status(self._t("در حال بررسی…"), "busy")
         self.update_check_button.setEnabled(False)
         worker = UpdateCheckWorker()
         worker.checked.connect(lambda ok, release, error: self._update_check_finished(ok, release, error, manual))
@@ -897,9 +905,10 @@ class MainWindow(QMainWindow):
             self.latest_release = release
             newer = compare_versions(release.version, current) > 0
             if newer:
-                self._update_status(self._t("نسخه جدید موجود است") + f" — v{release.version}")
+                self._update_status(self._t("نسخه جدید موجود است") + f" — v{release.version}", "new")
                 self.update_install_button.setEnabled(True)
                 self.update_install_button.setText(self._t("دانلود و نصب") + f" v{release.version}")
+                self.title_bar.set_update_available(release.version)
                 if not manual and not self._update_toast_shown:
                     self._update_toast_shown = True
                     self.toast.show_message(
@@ -909,11 +918,17 @@ class MainWindow(QMainWindow):
                 self.latest_release = None
                 self.update_install_button.setEnabled(False)
                 self.update_install_button.setText(self._t("دانلود و نصب"))
-                self._update_status(self._t("برنامه بروز است") + f" — v{current}")
+                self._update_status(self._t("برنامه بروز است") + f" — v{current}", "ok")
+                self.title_bar.set_update_available(None)
         else:
             self.update_install_button.setEnabled(False)
             self.update_install_button.setText(self._t("دانلود و نصب"))
-            self._update_status(self._t("بررسی ناموفق؛ اتصال خود را بررسی کن") + (f"\n{error}" if error else ""))
+            self._update_status(self._t("بررسی ناموفق؛ اتصال خود را بررسی کن") + (f"\n{error}" if error else ""), "error")
+            self.title_bar.set_update_available(None)
+        if hasattr(self, "update_versions_label") and release is not None:
+            self.update_versions_label.setText(
+                self._t("نسخه فعلی") + f": {current}  |  " + self._t("آخرین نسخه") + f": {release.version}"
+            )
 
     def _run_update_download(self) -> None:
         if self.update_download_worker and self.update_download_worker.isRunning():
@@ -927,7 +942,7 @@ class MainWindow(QMainWindow):
         self.update_install_button.setEnabled(False)
         self.update_progress.setVisible(True)
         self.update_progress.setValue(0)
-        self._update_status(self._t("در حال دانلود…"))
+        self._update_status(self._t("در حال دانلود…"), "busy")
         worker = UpdateDownloadWorker(self.latest_release)
         worker.progress.connect(self._update_download_progress)
         worker.staged.connect(self._update_download_finished)
@@ -946,7 +961,7 @@ class MainWindow(QMainWindow):
             self.update_check_button.setEnabled(True)
             self.update_install_button.setEnabled(True)
             self.toast.show_message(self._t("دانلود ناموفق بود"))
-            self._update_status(message)
+            self._update_status(message, "error")
             return
         self.pending_update_staging = staging
         answer = QMessageBox.question(
@@ -962,7 +977,7 @@ class MainWindow(QMainWindow):
             self.pending_update_staging = None
             self.update_progress.setVisible(False)
             self.update_install_button.setEnabled(True)
-            self._update_status(self._t("دانلود لغو شد"))
+            self._update_status(self._t("دانلود لغو شد"), "idle")
             return
         try:
             launch_applier(staging)
@@ -974,9 +989,18 @@ class MainWindow(QMainWindow):
         self.toast.show_message(self._t("در حال اعمال آپدیت… برنامه پس از خروج جایگزین می‌شود"))
         QTimer.singleShot(600, self.close)
 
-    def _update_status(self, text: str) -> None:
+    def _update_status(self, text: str, state: str = "idle") -> None:
         if hasattr(self, "update_status_label"):
             self.update_status_label.setText(text)
+        if hasattr(self, "update_status_dot"):
+            colors = {
+                "ok": "#2ECC71",
+                "new": self.theme.accent,
+                "error": self.theme.danger,
+                "busy": self.theme.warning,
+                "idle": self.theme.muted,
+            }
+            self.update_status_dot.setStyleSheet(f"color: {colors.get(state, colors['idle'])}; font-size: 15px;")
 
     def _build_general_settings_tab(self) -> QWidget:
         scroll, _host, layout = self._new_settings_scroll()
@@ -1009,6 +1033,9 @@ class MainWindow(QMainWindow):
         self.mark_watched_check = QCheckBox(self._t("علامت‌گذاری ویدئوهای YouTube به‌عنوان دیده‌شده"))
         self.mark_watched_check.setChecked(False)
         self.mark_watched_check.setToolTip(self._t("در پیش‌نمایش اصلی و دانلود از yt-dlp درخواست می‌شود و به کوکی حساب واردشده نیاز دارد؛ YouTube ممکن است نتیجه را فوری یا قابل‌اعتماد ثبت نکند."))
+        self.clipboard_monitor_check = QCheckBox(self._t("بررسی خودکار کلیپ‌بورد"))
+        self.clipboard_monitor_check.setChecked(True)
+        self.clipboard_monitor_check.setToolTip(self._t("اگر لینک دانلودی در کلیپ‌بورد کپی شود، به‌صورت خودکار به لیست لینک‌ها اضافه می‌شود."))
         checks = QGridLayout()
         checks.setHorizontalSpacing(18)
         checks.setVerticalSpacing(10)
@@ -1018,6 +1045,7 @@ class MainWindow(QMainWindow):
         checks.addWidget(self.subtitle_check, 1, 1)
         checks.addWidget(self.auto_subtitle_check, 2, 0)
         checks.addWidget(self.mark_watched_check, 2, 1)
+        checks.addWidget(self.clipboard_monitor_check, 3, 0)
         card_layout.addLayout(checks)
         mark_watched_note = self._muted(self._t("فقط برای YouTube است؛ این درخواست هنگام پیش‌نمایش اصلی و دانلود ارسال می‌شود، اما ثبت در تاریخچهٔ YouTube تضمین‌شده نیست."))
         mark_watched_note.setWordWrap(True)
@@ -2281,6 +2309,7 @@ class MainWindow(QMainWindow):
             "subtitles": self.subtitle_check.isChecked(),
             "auto_subtitles": self.auto_subtitle_check.isChecked(),
             "mark_watched": self.mark_watched_check.isChecked(),
+            "clipboard_monitor": self.clipboard_monitor_check.isChecked(),
             "sound_enabled": self.sound_enabled_check.isChecked() if hasattr(self, "sound_enabled_check") else True,
             "sound_theme": self._combo_data(self.sound_theme_combo, DEFAULT_SOUND_THEME) if hasattr(self, "sound_theme_combo") else DEFAULT_SOUND_THEME,
             "sound_volume": self.sound_volume_slider.value() if hasattr(self, "sound_volume_slider") else DEFAULT_VOLUME,
@@ -2413,6 +2442,7 @@ class MainWindow(QMainWindow):
         self.subtitle_check.setChecked(bool(state.get("subtitles", False)))
         self.auto_subtitle_check.setChecked(bool(state.get("auto_subtitles", True)))
         self.mark_watched_check.setChecked(bool(state.get("mark_watched", False)))
+        self.clipboard_monitor_check.setChecked(bool(state.get("clipboard_monitor", True)))
         if hasattr(self, "sound_enabled_check"):
             self.sound_enabled_check.setChecked(bool(state.get("sound_enabled", True)))
             self._set_combo_data(self.sound_theme_combo, normalize_sound_theme(str(state.get("sound_theme", DEFAULT_SOUND_THEME))))
@@ -2579,6 +2609,43 @@ class MainWindow(QMainWindow):
             if url not in existing:
                 existing.append(url)
         self.urls_edit.setPlainText("\n".join(existing))
+
+    def _extract_clipboard_urls(self, text: str) -> list[str]:
+        found = re.findall(r"https?://[^\s<>]+", text or "")
+        cleaned: list[str] = []
+        for url in found:
+            url = url.rstrip(".,;:!؟?)]}>")
+            if url.startswith(("http://", "https://")) and url not in cleaned:
+                cleaned.append(url)
+        return cleaned
+
+    def _poll_clipboard_for_links(self) -> None:
+        if not hasattr(self, "clipboard_monitor_check") or not self.clipboard_monitor_check.isChecked():
+            return
+        if getattr(self, "worker", None) is not None and self.worker.isRunning():
+            return
+        try:
+            text = QApplication.clipboard().text() or ""
+        except Exception:
+            return
+        text = text.strip()
+        if not text or text == self._last_clipboard_text:
+            return
+        self._last_clipboard_text = text
+        urls = self._extract_clipboard_urls(text)
+        if not urls:
+            return
+        existing = set(self._urls())
+        fresh = [url for url in urls if url not in existing]
+        if not fresh:
+            return
+        self._append_urls(fresh)
+        message = (
+            self._t("لینک از کلیپ‌بورد اضافه شد")
+            if len(fresh) == 1
+            else f"{self._digits(len(fresh))} {self._t('لینک از کلیپ‌بورد اضافه شد')}"
+        )
+        self.toast.show_message(message)
 
     def _later_entry(
         self,
@@ -2927,8 +2994,59 @@ class MainWindow(QMainWindow):
         return True
 
     def _download_later_selection(self) -> None:
-        if self._load_later_selection():
-            QTimer.singleShot(100, self._start_download)
+        selected = self._selected_later_entries()
+        if not selected:
+            self.toast.show_message(self._t("حداقل یک مورد را انتخاب کنید"))
+            return
+        # Group the selected rows by every download-affecting setting so each
+        # group downloads with ITS OWN preset instead of the first row's one.
+        groups: dict[tuple[str, str, str, bool], list[dict[str, Any]]] = {}
+        for _index, entry in selected:
+            key = (
+                str(entry.get("preset") or "auto"),
+                str(entry.get("output_dir") or "").strip(),
+                str(entry.get("audio_language") or ""),
+                bool(entry.get("organize_service", True)),
+            )
+            groups.setdefault(key, []).append(dict(entry))
+        if len(groups) == 1:
+            if self._load_later_selection():
+                QTimer.singleShot(100, self._start_download)
+            return
+        self._later_download_groups = list(groups.values())
+        self._later_group_busy = False
+        self._download_next_later_group()
+
+    def _download_next_later_group(self) -> None:
+        groups = getattr(self, "_later_download_groups", None)
+        if not groups:
+            self._later_download_groups = []
+            self._later_group_busy = False
+            self.toast.show_message(self._t("دانلود گروهی صف تمام شد"))
+            return
+        group = groups.pop(0)
+        if not group:
+            self._download_next_later_group()
+            return
+        self._later_group_busy = True
+        self._load_later_group_into_ui(group)
+        QTimer.singleShot(120, self._start_download)
+
+    def _load_later_group_into_ui(self, entries: list[dict[str, Any]]) -> None:
+        urls = [str(e.get("url") or "").strip() for e in entries if str(e.get("url") or "").strip()]
+        self._append_urls(urls, replace=True)
+        first = entries[0]
+        preset = str(first.get("preset") or "")
+        if preset:
+            self._set_combo_data(self.preset_combo, preset)
+        output = str(first.get("output_dir") or "").strip()
+        if output:
+            self.output_edit.setText(output)
+        self.organize_service_check.setChecked(bool(first.get("organize_service", True)))
+        language = str(first.get("audio_language") or "")
+        if language:
+            self._refresh_audio_language_combo(language)
+        self._set_main_page_by_key("download")
 
     def _remove_later_selection(self) -> None:
         selected = self._selected_later_entries()
@@ -5045,6 +5163,7 @@ class MainWindow(QMainWindow):
         self.subtitle_check.setChecked(bool(data.get("subtitles", False)))
         self.auto_subtitle_check.setChecked(bool(data.get("auto_subtitles", True)))
         self.mark_watched_check.setChecked(bool(data.get("mark_watched", False)))
+        self.clipboard_monitor_check.setChecked(bool(data.get("clipboard_monitor", True)))
         if hasattr(self, "sound_enabled_check"):
             self.sound_enabled_check.setChecked(bool(data.get("sound_enabled", True)))
             raw_sound_theme = str(data.get("sound_theme", DEFAULT_SOUND_THEME)).strip().lower()
@@ -5139,6 +5258,7 @@ class MainWindow(QMainWindow):
             "subtitles": self.subtitle_check.isChecked(),
             "auto_subtitles": self.auto_subtitle_check.isChecked(),
             "mark_watched": self.mark_watched_check.isChecked(),
+            "clipboard_monitor": self.clipboard_monitor_check.isChecked(),
             "sound_enabled": self.sound_enabled_check.isChecked() if hasattr(self, "sound_enabled_check") else True,
             "sound_theme": self._combo_data(self.sound_theme_combo, DEFAULT_SOUND_THEME) if hasattr(self, "sound_theme_combo") else DEFAULT_SOUND_THEME,
             "sound_volume": self.sound_volume_slider.value() if hasattr(self, "sound_volume_slider") else DEFAULT_VOLUME,
@@ -5350,6 +5470,9 @@ class MainWindow(QMainWindow):
         self._set_busy(False)
         self._download_cancel_requested = False
         self._forced_close_scheduled = False
+        if getattr(self, "_later_group_busy", False):
+            self._later_group_busy = False
+            QTimer.singleShot(300, self._download_next_later_group)
 
     def _schedule_forced_cancel_close(self) -> None:
         if self._forced_close_scheduled:

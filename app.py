@@ -25,7 +25,7 @@ if _native_host_mode():
 
 from bootstrap import SetupReport, ensure_environment
 
-APP_VERSION = "2.6.4"
+APP_VERSION = "2.6.5"
 
 
 def _install_runtime_logging() -> None:

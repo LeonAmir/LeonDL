@@ -560,5 +560,10 @@ EN.update({
     'دانلود لغو شد': 'Download cancelled',
     'اعمال آپدیت ناموفق بود': 'Failed to apply the update',
     'در حال اعمال آپدیت… برنامه پس از خروج جایگزین می‌شود': 'Applying the update… the app will be replaced after it exits',
+    'بررسی خودکار کلیپ‌بورد': 'Monitor clipboard automatically',
+    'اگر لینک دانلودی در کلیپ‌بورد کپی شود، به‌صورت خودکار به لیست لینک‌ها اضافه می‌شود.': 'When a download link is copied to the clipboard, it is added to the link list automatically.',
+    'لینک از کلیپ‌بورد اضافه شد': 'Link added from clipboard',
+    'در حالت اجرا از سورس فقط بررسی ممکن است؛ برای بروزرسانی از git pull استفاده کن.': 'When running from source, only checking is available. Update with git pull.',
+    'دانلود گروهی صف تمام شد': 'Queue group download finished',
 })
 EN_TO_FA.update({english: persian for persian, english in EN.items()})

@@ -1,4 +1,4 @@
-# LeonDL — v2.6.4
+# LeonDL — v2.6.5
 
 [فارسی](README.fa.md) | **English**
 
@@ -12,6 +12,7 @@ A multi-service, bilingual desktop downloader for **yt-dlp**, built with **PySid
 - **Quality/format selection**: auto, best quality, MP4, 8K down to 144p, MP3, M4A, original audio without conversion
 - **Audio language and subtitle selection** per link (manual and auto subtitles)
 - **Queue**: persistent download queue with background metadata fetching (title, duration, size, service, added time) and a per-row **Quality/Format selector** with live size recalculation
+- **Clipboard watch**: when a download link is copied, it is detected automatically and added to the link list (toggle in Settings)
 - **Automatic per-service folder organization**: `youtube.com/…`, `instagram.com/…`, `soundcloud.com/…`, etc. (can be disabled)
 - **Protected authentication**: browser cookies, manual cookies and saved per-domain profiles; DPAPI encryption on Windows; remembers each service's last successful method
 - **Chrome extension (Manifest V3) + Native Messaging**: send pages/links to Download or Queue, plus optional same-site cookies with explicit user permission
@@ -34,7 +35,7 @@ A multi-service, bilingual desktop downloader for **yt-dlp**, built with **PySid
 2. Double-click `LeonDL.vbs` — the app runs without a visible CMD window.
 3. On first run, `.venv` and the core packages are prepared automatically; auxiliary tools (FFmpeg, etc.) are installed later from the Packages and Tools section.
 
-> **Windows EXE build (recommended for end users):** extract the ZIP and run `LeonDL-2.6.4.exe` directly — no source launch or `.bat`/`.vbs` step. On first run the EXE checks FFmpeg/FFprobe and Deno and installs any missing tool automatically in the background.
+> **Windows EXE build (recommended for end users):** extract the ZIP and run `LeonDL-2.6.5.exe` directly — no source launch or `.bat`/`.vbs` step. On first run the EXE checks FFmpeg/FFprobe and Deno and installs any missing tool automatically in the background.
 
 Helper files:
 
