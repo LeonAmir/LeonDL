@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import math
+import sys
 import time
+from pathlib import Path
 
 from PySide6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer
-from PySide6.QtGui import QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPainterPath, QPen, QRadialGradient
+from PySide6.QtGui import QColor, QFont, QGuiApplication, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap, QRadialGradient
 from PySide6.QtWidgets import QWidget
 
 from ui.theme import Theme
@@ -22,6 +24,13 @@ class StartupSplash(QWidget):
         self._started = time.monotonic()
         self._closing = False
         self._fade: QPropertyAnimation | None = None
+        self._static: QPixmap | None = None
+        self._static_at = 0.0
+        self._logo: QPixmap | None = None
+        root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
+        icon = root / "assets" / "app_icon.png"
+        if icon.is_file():
+            self._logo = QPixmap(str(icon))
 
         self.setFixedSize(720, 408)
         self.setWindowFlags(
@@ -83,6 +92,10 @@ class StartupSplash(QWidget):
         return value
 
     def _draw_brand(self, painter: QPainter, rect: QRectF) -> None:
+        if self._logo is not None and not self._logo.isNull():
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            painter.drawPixmap(rect, self._logo, QRectF(self._logo.rect()))
+            return
         gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
         gradient.setColorAt(0.0, self._color(self.theme.primary_end))
         gradient.setColorAt(1.0, self._color(self.theme.primary_start))
@@ -123,11 +136,50 @@ class StartupSplash(QWidget):
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             elapsed = time.monotonic() - self._started
-            frame = QRectF(self.rect()).adjusted(10.0, 10.0, -10.0, -10.0)
-            clip = QPainterPath()
-            clip.addRoundedRect(frame, 26.0, 26.0)
-            painter.setClipPath(clip)
+            if (
+                self._static is None
+                or elapsed - self._static_at > 0.4
+                or self._static.size() != self.size()
+            ):
+                self._static = self._render_static(elapsed)
+                self._static_at = elapsed
+            painter.drawPixmap(0, 0, self._static)
 
+            # Animated progress segment — the only per-tick work.
+            track_left = 82.0
+            track_right = 638.0
+            track_y = 262.0
+            track_width = track_right - track_left
+            cycle = 3.1
+            phase = (elapsed % cycle) / cycle
+            sweep = 0.5 - 0.5 * math.cos(phase * math.tau)
+            segment = 118.0 + 6.0 * math.sin(elapsed * 0.9)
+            start = track_left + 8 + sweep * (track_width - segment - 16)
+            end = start + segment
+            painter.setPen(self._round_pen(self._with_alpha(self.theme.accent_hover, 168 if self.theme.dark else 132), 10.0))
+            painter.drawLine(start - 2, track_y, end + 2, track_y)
+            painter.setPen(self._round_pen(self._color(self.theme.accent), 6.0))
+            painter.drawLine(start, track_y, end, track_y)
+
+            painter.setPen(self._color(self.theme.text))
+            status_font = QFont("Tahoma", 9)
+            painter.setFont(status_font)
+            dots = "." * (int(elapsed * 2.2) % 4)
+            painter.drawText(QRectF(80, 282, 520, 28), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.status.rstrip(".…") + dots)
+        finally:
+            if painter.isActive():
+                painter.end()
+
+    def _render_static(self, elapsed: float) -> QPixmap:
+        frame = QRectF(self.rect()).adjusted(10.0, 10.0, -10.0, -10.0)
+        clip = QPainterPath()
+        clip.addRoundedRect(frame, 26.0, 26.0)
+
+        static = QPixmap(self.size())
+        static.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(static)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             background = QLinearGradient(frame.topLeft(), frame.bottomRight())
             background.setColorAt(0.0, self._color(self.theme.background_a))
             background.setColorAt(0.53, self._color(self.theme.background_b))
@@ -231,23 +283,6 @@ class StartupSplash(QWidget):
             painter.setPen(self._round_pen(self._with_alpha(self.theme.control_hover, 120 if self.theme.dark else 86), 1.0))
             painter.drawLine(track_left, track_y - 2, track_right, track_y - 2)
 
-            cycle = 3.1
-            phase = (elapsed % cycle) / cycle
-            sweep = 0.5 - 0.5 * math.cos(phase * math.tau)
-            segment = 118.0 + 6.0 * math.sin(elapsed * 0.9)
-            start = track_left + 8 + sweep * (track_width - segment - 16)
-            end = start + segment
-            painter.setPen(self._round_pen(self._with_alpha(self.theme.accent_hover, 168 if self.theme.dark else 132), 10.0))
-            painter.drawLine(start - 2, track_y, end + 2, track_y)
-            painter.setPen(self._round_pen(self._color(self.theme.accent), 6.0))
-            painter.drawLine(start, track_y, end, track_y)
-
-            painter.setPen(self._color(self.theme.text))
-            status_font = QFont("Tahoma", 9)
-            painter.setFont(status_font)
-            dots = "." * (int(elapsed * 2.2) % 4)
-            painter.drawText(QRectF(80, 282, 520, 28), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.status.rstrip(".…") + dots)
-
             painter.setPen(self._color(self.theme.muted))
             footer = QFont("Tahoma", 8)
             painter.setFont(footer)
@@ -255,6 +290,7 @@ class StartupSplash(QWidget):
         finally:
             if painter.isActive():
                 painter.end()
+        return static
 
     def set_status(self, text: str) -> None:
         self.status = str(text or "").strip() or self.status

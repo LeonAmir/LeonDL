@@ -68,6 +68,22 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     console.error("Leon bridge error", error);
     await chrome.action.setBadgeBackgroundColor({color: "#D93025"});
     await chrome.action.setBadgeText({text: "!"});
+    // First use: Chrome only shows the native-messaging permission prompt from
+    // an extension PAGE, not from a context-menu click. Surface the popup (the
+    // click is a user gesture) so the permission prompt can appear; the popup
+    // then re-sends this request automatically once approved.
+    const session = await chrome.storage.session.get({autoPopupShown: false});
+    if (!session.autoPopupShown) {
+      await chrome.storage.session.set({
+        autoPopupShown: true,
+        pendingSend: {
+          action: info.menuItemId === MENU_QUEUE ? "queue" : "open",
+          url,
+          title: tab?.title || ""
+        }
+      });
+      chrome.action.openPopup?.().catch?.(() => {});
+    }
   }
   setTimeout(() => chrome.action.setBadgeText({text: ""}), 1800);
 });

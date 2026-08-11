@@ -125,7 +125,7 @@ from ui.widgets import (
 )
 
 APP_NAME = "LeonDL"
-APP_VERSION = "2.6.5"
+APP_VERSION = "2.6.6"
 
 AUTH_CHOICES = {
     "none": ("بدون کوکی", "No cookies"),
@@ -2224,11 +2224,22 @@ class MainWindow(QMainWindow):
         if getattr(self, "speed_wave", None) is not None:
             self.speed_wave.set_theme(self.theme)
         self._refresh_action_icons()
+        self._refresh_nav_icons()
         self.surface.style().unpolish(self.surface)
         self.surface.style().polish(self.surface)
         self._refresh_queue_colors()
         if self.isVisible():
             self._schedule_native_blur(80)
+
+    def _refresh_nav_icons(self) -> None:
+        if not hasattr(self, "main_nav"):
+            return
+        icon_names = ["download", "search", "later", "history", "log", "settings", "link", "package"]
+        color = self.theme.text
+        accent = self.theme.accent
+        for index in range(self.main_nav.count()):
+            if index < len(icon_names):
+                self.main_nav.item(index).setIcon(make_line_icon(icon_names[index], color, accent=accent))
 
     def _show_theme_menu(self) -> None:
         menu = QMenu(self)

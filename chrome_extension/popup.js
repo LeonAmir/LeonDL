@@ -42,6 +42,8 @@ async function checkConnection() {
     await pingLeon(settings.pairingToken);
     connection("Connected to Leon", "ready");
     elements.pairingPanel.classList.add("hidden");
+    await chrome.storage.session.set({autoPopupShown: false});
+    await consumePendingSend();
   } catch (error) {
     const pairingProblem = isPairingError(error);
     connection(pairingProblem ? "Pairing required" : "Bridge unavailable", "error");
@@ -50,8 +52,16 @@ async function checkConnection() {
   }
 }
 
-async function submit(action) {
-  const url = validWebUrl(currentTab?.url || "");
+async function consumePendingSend() {
+  const stored = await chrome.storage.session.get("pendingSend");
+  const task = stored.pendingSend;
+  if (!task || !task.url) return;
+  await chrome.storage.session.remove("pendingSend");
+  await submit(task.action, {url: task.url, title: task.title || ""});
+}
+
+async function submit(action, overrides = {}) {
+  const url = validWebUrl(overrides.url || currentTab?.url || "");
   if (!url) {
     showStatus("This tab does not contain a downloadable web URL.", "error");
     return;
@@ -69,7 +79,7 @@ async function submit(action) {
     const response = await sendToLeon({
       action,
       url,
-      title: currentTab?.title || "",
+      title: overrides.title || currentTab?.title || "",
       cookies
     });
     const sentLabel = action === "queue" ? "Added to Leon Queue." : "Sent to Leon.";
