@@ -723,7 +723,7 @@ class TitleBar(QFrame):
         self.subtitle_label.setObjectName("appSubtitle")
         self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-        self.version_badge = QLabel("2.6.6")
+        self.version_badge = QLabel("2.6.7")
         self.version_badge.setObjectName("versionBadge")
         self.version_badge.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
@@ -731,6 +731,7 @@ class TitleBar(QFrame):
         self.update_button.setObjectName("titleUpdateButton")
         self.update_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.update_button.setFixedHeight(26)
+        self.update_button.setIconSize(QSize(14, 14))
         self.update_button.hide()
         self.update_button.clicked.connect(self.update_requested)
 
@@ -777,9 +778,15 @@ class TitleBar(QFrame):
 
     def set_update_available(self, version: str | None) -> None:
         if version:
-            self.update_button.setText(f"⬇ v{version}")
+            self.update_button.setText(f"v{version}")
+            if self._theme is not None:
+                self.update_button.setIcon(make_line_icon("download", self._theme.accent, size=14))
+            self.update_button.setToolTip(
+                "Update to v%s" % version if self.language == "en" else f"بروزرسانی به v{version}"
+            )
             self.update_button.show()
         else:
+            self.update_button.setIcon(QIcon())
             self.update_button.hide()
 
     def set_language(self, language: str) -> None:
@@ -801,9 +808,10 @@ class TitleBar(QFrame):
         normal = theme.text
         self.brand_mark.set_theme(theme)
         self.update_button.setStyleSheet(
-            f"QPushButton {{ background: {theme.accent}; color: {theme.accent_text};"
-            f" border: none; border-radius: 11px; padding: 0 12px; font-weight: 600; }}"
-            f"QPushButton:hover {{ background: {theme.accent_hover}; }}"
+            f"QPushButton {{ background: transparent; color: {theme.accent};"
+            f" border: 1px solid {theme.accent}; border-radius: 11px; padding: 0 10px;"
+            f" font-weight: 600; font-size: 11px; }}"
+            f"QPushButton:hover {{ background: {theme.accent}22; border-color: {theme.accent}; }}"
         )
         self.min_button.setIcon(make_line_icon("minimize", normal, size=21))
         self.close_button.setIcon(make_line_icon("close", theme.danger, size=21))

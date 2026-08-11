@@ -30,7 +30,37 @@ class StartupSplash(QWidget):
         root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
         icon = root / "assets" / "app_icon.png"
         if icon.is_file():
-            self._logo = QPixmap(str(icon))
+            raw = QPixmap(str(icon))
+            if not raw.isNull():
+                image = raw.toImage()
+                left = image.width()
+                right = 0
+                top = image.height()
+                bottom = 0
+                for y in range(0, image.height(), 2):
+                    for x in range(0, image.width(), 2):
+                        if image.pixelColor(x, y).alpha() > 96:
+                            if x < left:
+                                left = x
+                            if x > right:
+                                right = x
+                            if y < top:
+                                top = y
+                            if y > bottom:
+                                bottom = y
+                if right > left and bottom > top:
+                    margin = 4
+                    left = max(0, left - margin)
+                    top = max(0, top - margin)
+                    right = min(image.width(), right + margin)
+                    bottom = min(image.height(), bottom + margin)
+                    raw = raw.copy(left, top, right - left, bottom - top)
+                self._logo = raw.scaled(
+                    180,
+                    180,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation,
+                )
 
         self.setFixedSize(720, 408)
         self.setWindowFlags(
@@ -230,7 +260,7 @@ class StartupSplash(QWidget):
             painter.setBrush(self._color(self.theme.glass_strong))
             painter.drawRoundedRect(inner, 22.0, 22.0)
 
-            self._draw_brand(painter, QRectF(54, 50, 48, 48))
+            self._draw_brand(painter, QRectF(50, 46, 60, 60))
             painter.setPen(self._color(self.theme.accent_soft))
             title = QFont("Segoe UI", 19)
             title.setBold(True)

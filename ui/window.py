@@ -125,7 +125,7 @@ from ui.widgets import (
 )
 
 APP_NAME = "LeonDL"
-APP_VERSION = "2.6.6"
+APP_VERSION = "2.6.7"
 
 AUTH_CHOICES = {
     "none": ("بدون کوکی", "No cookies"),
@@ -823,42 +823,30 @@ class MainWindow(QMainWindow):
         self.settings_tabs.addTab(self._build_storage_settings_tab(), self._t("محل ذخیره"))
         self.settings_tabs.addTab(self._build_cookie_settings_tab(), self._t("کوکی و ورود"))
         self.settings_tabs.addTab(self._build_appearance_settings_tab(), self._t("زبان و ظاهر"))
-        self.settings_tabs.addTab(self._build_update_settings_tab(), self._t("بروزرسانی"))
         layout.addWidget(self.settings_tabs)
         return page
 
-    def _build_update_settings_tab(self) -> QWidget:
-        scroll, _host, layout = self._new_settings_scroll()
+    def _build_update_card(self) -> QWidget:
         card = GlassCard()
         card.setObjectName("sectionCard")
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(15, 13, 15, 13)
-        card_layout.setSpacing(10)
+        card_layout.setContentsMargins(15, 12, 15, 12)
+        card_layout.setSpacing(8)
 
-        status_row = QHBoxLayout()
-        status_row.setSpacing(8)
+        head_row = QHBoxLayout()
+        head_row.setSpacing(10)
         self.update_status_dot = QLabel("●")
         self.update_status_dot.setFixedSize(12, 12)
         self.update_status_dot.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.update_status_label = ResponsiveLabel(self._t("برنامه بروز است"))
         self.update_status_label.setObjectName("muted")
-        status_row.addWidget(self.update_status_dot)
-        status_row.addWidget(self.update_status_label, 1)
-        card_layout.addLayout(status_row)
-
         self.update_versions_label = self._muted(
-            self._t("نسخه فعلی") + f": {read_current_version()}  |  " + self._t("آخرین نسخه") + ": —"
+            self._t("نسخه فعلی") + f": {read_current_version()}"
         )
-        card_layout.addWidget(self.update_versions_label)
-
-        self.update_progress = QProgressBar()
-        self.update_progress.setRange(0, 100)
-        self.update_progress.setValue(0)
-        self.update_progress.setTextVisible(True)
-        self.update_progress.setVisible(False)
-        self.update_progress.setObjectName("updateProgress")
-        self.update_progress.setFixedHeight(6)
-        card_layout.addWidget(self.update_progress)
+        head_row.addWidget(self.update_status_dot)
+        head_row.addWidget(self.update_status_label, 1)
+        head_row.addWidget(self.update_versions_label)
+        card_layout.addLayout(head_row)
 
         buttons_row = QHBoxLayout()
         buttons_row.setSpacing(10)
@@ -872,13 +860,20 @@ class MainWindow(QMainWindow):
         buttons_row.addStretch(1)
         card_layout.addLayout(buttons_row)
 
+        self.update_progress = QProgressBar()
+        self.update_progress.setRange(0, 100)
+        self.update_progress.setValue(0)
+        self.update_progress.setTextVisible(True)
+        self.update_progress.setVisible(False)
+        self.update_progress.setObjectName("updateProgress")
+        self.update_progress.setFixedHeight(6)
+        card_layout.addWidget(self.update_progress)
+
         if not getattr(sys, "frozen", False):
             card_layout.addWidget(
                 self._muted(self._t("در حالت اجرا از سورس فقط بررسی ممکن است؛ برای بروزرسانی از git pull استفاده کن."))
             )
-
-        layout.addWidget(card)
-        return scroll
+        return card
 
     def _silent_update_check(self) -> None:
         if self.latest_release is None:
@@ -1072,6 +1067,7 @@ class MainWindow(QMainWindow):
         advanced.setColumnStretch(1, 1)
         card_layout.addLayout(advanced)
         layout.addWidget(card)
+        layout.addWidget(self._build_update_card())
         layout.addStretch(1)
         return scroll
 
