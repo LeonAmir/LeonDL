@@ -281,14 +281,14 @@ class PackageStatusWorker(QThread):
 
 
 def _download_json(url: str) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.6.7"})
+    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.6.8"})
     with urllib.request.urlopen(request, timeout=45) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def _download_file(url: str, destination: Path, log: Callable[[str], None]) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.6.7"})
+    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.6.8"})
     with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as handle:
         total = int(response.headers.get("Content-Length") or 0)
         received = 0

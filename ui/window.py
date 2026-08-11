@@ -125,7 +125,7 @@ from ui.widgets import (
 )
 
 APP_NAME = "LeonDL"
-APP_VERSION = "2.6.7"
+APP_VERSION = "2.6.8"
 
 AUTH_CHOICES = {
     "none": ("بدون کوکی", "No cookies"),

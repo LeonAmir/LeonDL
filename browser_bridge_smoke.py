@@ -21,7 +21,7 @@ def main() -> None:
     manifest = json.loads((root / "chrome_extension" / "manifest.json").read_text(encoding="utf-8"))
     expected_id = "cilmnmiidbeningdcggocddbpjmmclmn"
     assert manifest["manifest_version"] == 3
-    assert manifest["version"] == "2.6.7"
+    assert manifest["version"] == "2.6.8"
     assert extension_id_from_key(manifest["key"]) == expected_id
     assert "nativeMessaging" in manifest["permissions"]
     assert "cookies" in manifest["permissions"]
@@ -141,9 +141,9 @@ def main() -> None:
 
             release_dir = Path(temporary_home) / "release"
             release_dir.mkdir()
-            (release_dir / "VERSION").write_text("2.6.7\n", encoding="utf-8")
-            native_exe = release_dir / "LeonDL-Native-Host-2.6.7.exe"
-            gui_exe = release_dir / "LeonDL-2.6.7.exe"
+            (release_dir / "VERSION").write_text("2.6.8\n", encoding="utf-8")
+            native_exe = release_dir / "LeonDL-Native-Host-2.6.8.exe"
+            gui_exe = release_dir / "LeonDL-2.6.8.exe"
             native_exe.write_bytes(b"native")
             gui_exe.write_bytes(b"gui")
             previous_executable = bridge.sys.executable

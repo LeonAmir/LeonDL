@@ -28,39 +28,56 @@ class StartupSplash(QWidget):
         self._static_at = 0.0
         self._logo: QPixmap | None = None
         root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[1]))
-        icon = root / "assets" / "app_icon.png"
+        icon = root / "assets" / "splash_logo.png"
+        pre_trimmed = True
+        if not icon.is_file():
+            icon = root / "assets" / "app_icon.png"
+            pre_trimmed = False
         if icon.is_file():
             raw = QPixmap(str(icon))
             if not raw.isNull():
-                image = raw.toImage()
-                left = image.width()
-                right = 0
-                top = image.height()
-                bottom = 0
-                for y in range(0, image.height(), 2):
-                    for x in range(0, image.width(), 2):
-                        if image.pixelColor(x, y).alpha() > 96:
-                            if x < left:
-                                left = x
-                            if x > right:
-                                right = x
-                            if y < top:
-                                top = y
-                            if y > bottom:
-                                bottom = y
-                if right > left and bottom > top:
-                    margin = 4
-                    left = max(0, left - margin)
-                    top = max(0, top - margin)
-                    right = min(image.width(), right + margin)
-                    bottom = min(image.height(), bottom + margin)
-                    raw = raw.copy(left, top, right - left, bottom - top)
-                self._logo = raw.scaled(
-                    180,
-                    180,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
+                if pre_trimmed:
+                    self._logo = raw.scaled(
+                        240,
+                        240,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
+                else:
+                    image = raw.toImage()
+                    left = image.width()
+                    right = 0
+                    top = image.height()
+                    bottom = 0
+                    for y in range(0, image.height(), 2):
+                        for x in range(0, image.width(), 2):
+                            if image.pixelColor(x, y).alpha() > 96:
+                                if x < left:
+                                    left = x
+                                if x > right:
+                                    right = x
+                                if y < top:
+                                    top = y
+                                if y > bottom:
+                                    bottom = y
+                    if right > left and bottom > top:
+                        inset = int(min(bottom - top, right - left) * 0.06)
+                        left = max(0, left - 4)
+                        top = max(0, top - 4)
+                        right = min(image.width(), right + 4)
+                        bottom = min(image.height(), bottom + 4)
+                        if inset > 0 and (right - left) > inset * 2 and (bottom - top) > inset * 2:
+                            left += inset
+                            top += inset
+                            right -= inset
+                            bottom -= inset
+                        raw = raw.copy(left, top, right - left, bottom - top)
+                    self._logo = raw.scaled(
+                        240,
+                        240,
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation,
+                    )
 
         self.setFixedSize(720, 408)
         self.setWindowFlags(
@@ -201,13 +218,20 @@ class StartupSplash(QWidget):
                 painter.end()
 
     def _render_static(self, elapsed: float) -> QPixmap:
+        # Render at device-pixel-ratio resolution so text and artwork stay
+        # crisp on HiDPI displays (a logical-size cache gets upscaled -> blur).
+        dpr = self.devicePixelRatioF() or 1.0
+        width = max(1, int(round(self.width() * dpr)))
+        height = max(1, int(round(self.height() * dpr)))
         frame = QRectF(self.rect()).adjusted(10.0, 10.0, -10.0, -10.0)
         clip = QPainterPath()
         clip.addRoundedRect(frame, 26.0, 26.0)
 
-        static = QPixmap(self.size())
+        static = QPixmap(width, height)
+        static.setDevicePixelRatio(dpr)
         static.fill(Qt.GlobalColor.transparent)
         painter = QPainter(static)
+        painter.scale(dpr, dpr)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
             background = QLinearGradient(frame.topLeft(), frame.bottomRight())
@@ -260,7 +284,7 @@ class StartupSplash(QWidget):
             painter.setBrush(self._color(self.theme.glass_strong))
             painter.drawRoundedRect(inner, 22.0, 22.0)
 
-            self._draw_brand(painter, QRectF(50, 46, 60, 60))
+            self._draw_brand(painter, QRectF(46, 42, 66, 66))
             painter.setPen(self._color(self.theme.accent_soft))
             title = QFont("Segoe UI", 19)
             title.setBold(True)
