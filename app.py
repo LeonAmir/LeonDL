@@ -25,7 +25,7 @@ if _native_host_mode():
 
 from bootstrap import SetupReport, ensure_environment
 
-APP_VERSION = "2.6.3"
+APP_VERSION = "2.6.4"
 
 
 def _install_runtime_logging() -> None:
@@ -164,7 +164,7 @@ def main() -> int:
     app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
     _apply_application_font(app)
 
-    icon_path = Path(__file__).resolve().parent / "assets" / "app_icon.svg"
+    icon_path = Path(__file__).resolve().parent / "assets" / "app_icon.png"
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 

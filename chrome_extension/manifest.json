@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LeonDL Bridge",
   "short_name": "Leon Bridge",
-  "version": "2.6.3",
+  "version": "2.6.4",
   "description": "Send the current page, media links, and optional site cookies directly to LeonDL.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAytj1n1KCuZCl3N5qvU/i/0DJ3EVgYLNooKVdeY0mgwjZ6K8PLaIE7pcrWlRiuMOgckVOqbibK2HA98JcHQzdw+jdmCN/AB6/GyJ7Tx0RhJfwD+zfKI16Q1ym3wZ/b8rYeYevRkqSBahXIlnonhyOy/s0IpHudJFtd4YdAfOjj8wC8JdOiL9pJN+jgJ4oqqUReBgVbjdE38Bg7avtKbYwPpTJxtCvW4C5JAbNix4qxo65gH3o7HsRuzE/E9F2kU7NctZzbRQu/ZrSE1zKK2MzIMKQ1RTGpkt63AcG60SKkmcXJ0dZHxL6MleUrWss2uf7su5gsSq3T5HXAO4kc+//8QIDAQAB",
   "minimum_chrome_version": "116",

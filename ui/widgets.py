@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
+from pathlib import Path
 
 from PySide6.QtCore import (
     QEasingCurve,
@@ -22,6 +23,7 @@ from PySide6.QtGui import (
     QMouseEvent,
     QPainter,
     QPainterPath,
+    QPalette,
     QPen,
     QPixmap,
     QRadialGradient,
@@ -390,6 +392,34 @@ class ResponsiveLabel(QLabel):
         return QSize(0, hint.height())
 
 
+class ElideLabel(QLabel):
+    """QLabel that elides its text with an ellipsis when space runs out."""
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._full_text = text
+        self.setMinimumWidth(0)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
+
+    def setText(self, text: str) -> None:
+        self._full_text = text or ""
+        super().setText(self._full_text)
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+        painter = QPainter(self)
+        try:
+            painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+            rect = self.rect()
+            metrics = painter.fontMetrics()
+            elided = metrics.elidedText(self._full_text, Qt.TextElideMode.ElideRight, rect.width())
+            painter.setPen(self.palette().color(QPalette.ColorRole.WindowText))
+            painter.drawText(rect, self.alignment() | Qt.AlignmentFlag.AlignVCenter, elided)
+        finally:
+            if painter.isActive():
+                painter.end()
+
+
 class AuroraSurface(QFrame):
     """Animated ambient background painted behind the glass dashboard."""
 
@@ -504,43 +534,59 @@ class AuroraSurface(QFrame):
 
 
 class BrandMark(QWidget):
-    """Small vector Leon monogram used in the title bar."""
+    """LeonDL wordmark logo in the title bar, tinted per theme.
+
+    Loads ``assets/brand_wordmark_<theme>.png`` (pre-tinted variants for each
+    theme) and falls back to the gold original when a variant is missing.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._theme: Theme | None = None
-        self.setFixedSize(40, 40)
+        self._pixmap: QPixmap | None = None
+        self._pad_left = 18
+        self._pad_right = 8
+        self.setFixedSize(126, 34)
 
     def set_theme(self, theme: Theme) -> None:
         self._theme = theme
+        self._load_pixmap()
         self.update()
 
-    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+    def _load_pixmap(self) -> None:
+        assets_dir = Path(__file__).resolve().parents[1] / "assets"
         theme = self._theme
-        if theme is None:
+        candidate = (
+            assets_dir / f"brand_wordmark_{theme.name}.png" if theme is not None else assets_dir / "brand_wordmark.png"
+        )
+        if not candidate.is_file():
+            candidate = assets_dir / "brand_wordmark.png"
+        if not candidate.is_file():
+            self._pixmap = None
+            return
+        pixmap = QPixmap(str(candidate))
+        if pixmap.isNull():
+            self._pixmap = None
+            return
+        target_h = 36
+        target_w = max(60, round(pixmap.width() * target_h / pixmap.height()))
+        self._pixmap = pixmap.scaled(
+            target_w,
+            target_h,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        self.setFixedSize(target_w + self._pad_left + self._pad_right, target_h + 6)
+
+    def paintEvent(self, event) -> None:  # noqa: N802 - Qt override
+        if self._pixmap is None:
             return
         painter = QPainter(self)
         try:
-
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-            rect = QRectF(2.0, 2.0, 36.0, 36.0)
-            gradient = QLinearGradient(rect.topLeft(), rect.bottomRight())
-            gradient.setColorAt(0.0, QColor(theme.primary_end))
-            gradient.setColorAt(1.0, QColor(theme.primary_start))
-            painter.setPen(QPen(QColor(theme.accent_hover), 1.0))
-            painter.setBrush(QBrush(gradient))
-            painter.drawRoundedRect(rect, 12.0, 12.0)
-
-            # Stylized L + download arrow.
-            brand_pen = QPen(QColor(theme.accent_text), 3.0)
-            brand_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            brand_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-            painter.setPen(brand_pen)
-            painter.drawLine(13.0, 11.5, 13.0, 26.0)
-            painter.drawLine(13.0, 26.0, 23.5, 26.0)
-            painter.drawLine(25.5, 11.5, 25.5, 21.0)
-            painter.drawLine(22.2, 17.7, 25.5, 21.1)
-            painter.drawLine(28.8, 17.7, 25.5, 21.1)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+            x = self._pad_left
+            y = (self.height() - self._pixmap.height()) // 2
+            painter.drawPixmap(x, y, self._pixmap)
         finally:
             if painter.isActive():
                 painter.end()
@@ -672,16 +718,11 @@ class TitleBar(QFrame):
         layout.setSpacing(10)
 
         self.brand_mark = BrandMark(self)
-        title_box = QVBoxLayout()
-        title_box.setSpacing(0)
-        self.title_label = QLabel("LeonDL")
-        self.title_label.setObjectName("appTitle")
-        self.subtitle_label = QLabel()
+        self.subtitle_label = ElideLabel()
         self.subtitle_label.setObjectName("appSubtitle")
-        title_box.addWidget(self.title_label)
-        title_box.addWidget(self.subtitle_label)
+        self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-        self.version_badge = QLabel("2.6.3")
+        self.version_badge = QLabel("2.6.4")
         self.version_badge.setObjectName("versionBadge")
         self.version_badge.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 
@@ -702,7 +743,7 @@ class TitleBar(QFrame):
         controls.addWidget(self.close_button)
 
         layout.addWidget(self.brand_mark)
-        layout.addLayout(title_box)
+        layout.addWidget(self.subtitle_label)
         layout.addWidget(self.version_badge)
         layout.addStretch(1)
         layout.addLayout(controls)
@@ -728,7 +769,6 @@ class TitleBar(QFrame):
     def set_language(self, language: str) -> None:
         self.language = "en" if language == "en" else "fa"
         alignment = Qt.AlignmentFlag.AlignLeft
-        self.title_label.setAlignment(alignment | Qt.AlignmentFlag.AlignVCenter)
         self.subtitle_label.setAlignment(alignment | Qt.AlignmentFlag.AlignVCenter)
         self.subtitle_label.setText(tr(self.language, "دانلود سریع و حرفه‌ای با yt-dlp"))
         self.close_button.setToolTip(tr(self.language, "بستن"))

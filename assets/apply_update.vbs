@@ -117,7 +117,7 @@ Sub Apply()
 
     ' 4. Copy the bundled docs beside the EXE.
     Dim docName
-    For Each docName In Array("README.md", "CHANGELOG.md", "VERSION", "LICENSE")
+    For Each docName In Array("README.md", "VERSION", "LICENSE")
         If fso.FileExists(STAGING_DIR & "\" & docName) Then
             fso.CopyFile STAGING_DIR & "\" & docName, RELEASE_DIR & "\" & docName, True
         End If

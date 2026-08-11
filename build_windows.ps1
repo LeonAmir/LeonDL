@@ -36,6 +36,7 @@ Invoke-NativeChecked python -m PyInstaller `
   --onefile `
   --windowed `
   --name $appName `
+  --icon "assets\app_icon.ico" `
   --add-data "assets;assets" `
   --collect-all yt_dlp `
   --collect-all yt_dlp_ejs `
@@ -47,9 +48,10 @@ Invoke-NativeChecked python -m PyInstaller `
   --onefile `
   --console `
   --name $hostName `
+  --icon "assets\app_icon.ico" `
   native_host_entry.py
 
-$releaseDocs = @("README.md", "CHANGELOG.md", "VERSION", "LICENSE")
+$releaseDocs = @("README.md", "VERSION", "LICENSE")
 foreach ($doc in $releaseDocs) {
   if (-not (Test-Path $doc)) { throw "Required release document is missing: $doc" }
   Copy-Item $doc -Destination "dist\$doc" -Force
