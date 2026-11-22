@@ -56,9 +56,9 @@ def test_queue_ui_wiring() -> None:
 
 
 def test_version_contract() -> None:
-    assert Path("VERSION").read_text(encoding="utf-8").strip() == "2.6.8"
+    assert Path("VERSION").read_text(encoding="utf-8").strip() == "2.7.0"
     manifest = Path("chrome_extension/manifest.json").read_text(encoding="utf-8")
-    assert '"version": "2.6.8"' in manifest
+    assert '"version": "2.7.0"' in manifest
 
 
 if __name__ == "__main__":

@@ -165,6 +165,16 @@ def _numeric_version(value: str) -> tuple[int, ...]:
 
 
 def installed_yt_dlp_version() -> str:
+    # The updatable engine directory wins over the copy bundled in the EXE.
+    try:
+        from core.engine_loader import activate_engines, engine_installed_version
+
+        activate_engines()
+        version = engine_installed_version("yt_dlp")
+        if version:
+            return version
+    except Exception:
+        pass
     try:
         return importlib.metadata.version("yt-dlp")
     except Exception:

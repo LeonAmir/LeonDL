@@ -16,7 +16,13 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QObject, QThread, Signal
 
+from core.engine_loader import engine_installed_version, install_engine
+from core.engine_loader import ENGINE_PACKAGES as _ENGINE_PACKAGES
 from core.optional_engines import APKEEP_PATH, TOOLS_DIR
+
+
+def engine_keys() -> set[str]:
+    return set(_ENGINE_PACKAGES)
 
 
 APP_DIR = Path(__file__).resolve().parents[1]
@@ -46,6 +52,16 @@ class PackageStatus:
 
 
 def _distribution_version(name: str) -> str:
+    # Updatable engines (yt-dlp / yt-dlp-ejs) live in engines/ and take priority
+    # over the copy bundled in the EXE, so report the engine version first.
+    engine_key = {"yt-dlp": "yt_dlp", "yt-dlp-ejs": "yt_dlp_ejs"}.get(name)
+    if engine_key:
+        try:
+            engine_version = engine_installed_version(engine_key)
+            if engine_version:
+                return engine_version
+        except Exception:
+            pass
     try:
         return importlib.metadata.version(name)
     except (importlib.metadata.PackageNotFoundError, ValueError, OSError):
@@ -281,14 +297,14 @@ class PackageStatusWorker(QThread):
 
 
 def _download_json(url: str) -> dict[str, Any]:
-    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.6.8"})
+    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.7.0"})
     with urllib.request.urlopen(request, timeout=45) as response:
         return json.loads(response.read().decode("utf-8"))
 
 
 def _download_file(url: str, destination: Path, log: Callable[[str], None]) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.6.8"})
+    request = urllib.request.Request(url, headers={"User-Agent": "LeonDL/2.7.0"})
     with urllib.request.urlopen(request, timeout=120) as response, destination.open("wb") as handle:
         total = int(response.headers.get("Content-Length") or 0)
         received = 0
@@ -397,6 +413,28 @@ class PackageActionWorker(QThread):
         command.extend(arguments)
         return command
 
+    def _engine_install(self) -> bool:
+        """Install a pure-python engine into the updatable engines/ directory.
+
+        Works in both frozen and source builds: no pip, no interpreter mutation,
+        so the result is picked up by ``core.engine_loader`` on the next import.
+        """
+        engine_key = self.action.partition("_", 1)[2]
+        if engine_key not in engine_keys():
+            return False
+
+        def log_line(text: str) -> None:
+            self.log.emit(text)
+
+        self.log.emit(f"$ LeonDL engine installer: {engine_key}")
+        ok, message = install_engine(engine_key, log=log_line)
+        if ok:
+            verb = "updated" if self.action.startswith("update_") else "installed"
+            self.finished_action.emit(True, f"{engine_key} {message} {verb} successfully.")
+        else:
+            self.finished_action.emit(False, message)
+        return True
+
     def _winget_command(self) -> list[str]:
         if os.name != "nt" or not shutil.which("winget"):
             return []
@@ -440,6 +478,14 @@ class PackageActionWorker(QThread):
         return []
 
     def run(self) -> None:
+        # yt-dlp / yt-dlp-ejs install into the updatable engines/ directory so
+        # they can be updated from inside the frozen EXE (pip cannot touch the
+        # bundled packages, and those two ship as pure-python wheels).
+        engine_key = self.action.partition("_", 1)[2]
+        if engine_key in engine_keys() and self.action.split("_", 1)[0] in {"install", "update"}:
+            if self._engine_install():
+                return
+
         # Frozen builds cannot mutate bundled Python packages. For their
         # executable-only optional engines, use the official binary path.
         if self.action in {"install_apkeep", "update_apkeep"}:

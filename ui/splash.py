@@ -193,9 +193,24 @@ class StartupSplash(QWidget):
             painter.drawPixmap(0, 0, self._static)
 
             # Animated progress segment — the only per-tick work.
-            track_left = 82.0
-            track_right = 638.0
-            track_y = 262.0
+            # Coordinates mirror the static track: card is inset 24 from frame,
+            # frame inset 14 from window, pad 22 inside card -> track at y ~ it+104.
+            M = 24.0
+            frame = QRectF(self.rect()).adjusted(14.0, 14.0, -14.0, -14.0)
+            left = frame.left() + M
+            right = frame.right() - M
+            top = frame.top() + M
+            bottom = frame.bottom() - M
+            logo_size = 60.0
+            card_top = top + logo_size + 22
+            card = QRectF(left, card_top, right - left, bottom - card_top - 8)
+            pad = 22.0
+            il = card.left() + pad
+            ir = card.right() - pad
+            it = card.top() + pad
+            track_left = il + 2
+            track_right = ir - 2
+            track_y = it + 104.0
             track_width = track_right - track_left
             cycle = 3.1
             phase = (elapsed % cycle) / cycle
@@ -212,7 +227,7 @@ class StartupSplash(QWidget):
             status_font = QFont("Tahoma", 9)
             painter.setFont(status_font)
             dots = "." * (int(elapsed * 2.2) % 4)
-            painter.drawText(QRectF(80, 282, 520, 28), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.status.rstrip(".…") + dots)
+            painter.drawText(QRectF(il, track_y + 16, track_width, 28), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self.status.rstrip(".…") + dots)
         finally:
             if painter.isActive():
                 painter.end()
@@ -223,9 +238,11 @@ class StartupSplash(QWidget):
         dpr = self.devicePixelRatioF() or 1.0
         width = max(1, int(round(self.width() * dpr)))
         height = max(1, int(round(self.height() * dpr)))
-        frame = QRectF(self.rect()).adjusted(10.0, 10.0, -10.0, -10.0)
+        # Outer window frame: 14px margin, 24px radius.
+        frame = QRectF(self.rect()).adjusted(14.0, 14.0, -14.0, -14.0)
+        outer_radius = 24.0
         clip = QPainterPath()
-        clip.addRoundedRect(frame, 26.0, 26.0)
+        clip.addRoundedRect(frame, outer_radius, outer_radius)
 
         static = QPixmap(width, height)
         static.setDevicePixelRatio(dpr)
@@ -234,113 +251,115 @@ class StartupSplash(QWidget):
         painter.scale(dpr, dpr)
         try:
             painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+            # Background fill.
             background = QLinearGradient(frame.topLeft(), frame.bottomRight())
             background.setColorAt(0.0, self._color(self.theme.background_a))
             background.setColorAt(0.53, self._color(self.theme.background_b))
             background.setColorAt(1.0, self._color(self.theme.background_c))
             painter.fillPath(clip, background)
 
+            # Ambient orbs (subtle, behind content).
             accent_alpha = 58 if self.theme.dark else 34
             second_alpha = 46 if self.theme.dark else 28
             third_alpha = 34 if self.theme.dark else 20
-            self._ambient_orb(
-                painter,
-                118 + math.sin(elapsed * 0.7) * 7,
-                70 + math.cos(elapsed * 0.55) * 5,
-                210,
-                self.theme.accent,
-                accent_alpha,
-            )
-            self._ambient_orb(
-                painter,
-                626 + math.cos(elapsed * 0.6) * 6,
-                126 + math.sin(elapsed * 0.5) * 6,
-                186,
-                self.theme.primary_start,
-                second_alpha,
-            )
-            self._ambient_orb(
-                painter,
-                404 + math.sin(elapsed * 0.45) * 8,
-                396 + math.cos(elapsed * 0.4) * 4,
-                230,
-                self.theme.primary_end,
-                third_alpha,
-            )
+            self._ambient_orb(painter, 118 + math.sin(elapsed * 0.7) * 7, 70 + math.cos(elapsed * 0.55) * 5, 210, self.theme.accent, accent_alpha)
+            self._ambient_orb(painter, 626 + math.cos(elapsed * 0.6) * 6, 126 + math.sin(elapsed * 0.5) * 6, 186, self.theme.primary_start, second_alpha)
+            self._ambient_orb(painter, 404 + math.sin(elapsed * 0.45) * 8, 396 + math.cos(elapsed * 0.4) * 4, 230, self.theme.primary_end, third_alpha)
 
+            # Top sheen.
             sheen = QLinearGradient(frame.topLeft(), frame.bottomRight())
             sheen.setColorAt(0.0, QColor(255, 255, 255, 12 if self.theme.dark else 28))
             sheen.setColorAt(0.42, QColor(255, 255, 255, 0))
             sheen.setColorAt(1.0, QColor(255, 255, 255, 7 if self.theme.dark else 18))
             painter.fillPath(clip, sheen)
 
+            # Outer border.
             painter.setClipping(False)
             painter.setPen(QPen(self._color(self.theme.border), 1.0))
             painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.drawRoundedRect(frame, 26.0, 26.0)
+            painter.drawRoundedRect(frame, outer_radius, outer_radius)
 
-            inner = QRectF(28, 26, 664, 356)
-            painter.setPen(QPen(self._color(self.theme.border), 1.0))
-            painter.setBrush(self._color(self.theme.glass_strong))
-            painter.drawRoundedRect(inner, 22.0, 22.0)
+            # Content margins (safe area inside the frame).
+            M = 24.0            # outer margin
+            left = frame.left() + M
+            right = frame.right() - M
+            top = frame.top() + M
+            bottom = frame.bottom() - M
+            content_w = right - left
 
-            self._draw_brand(painter, QRectF(46, 42, 66, 66))
-            painter.setPen(self._color(self.theme.accent_soft))
+            # --- Header (logo + title + subtitle + version badge) ---
+            logo_size = 60.0
+            self._draw_brand(painter, QRectF(left, top, logo_size, logo_size))
+
             title = QFont("Segoe UI", 19)
             title.setBold(True)
+            painter.setPen(self._color(self.theme.accent_soft))
             painter.setFont(title)
-            painter.drawText(QRectF(116, 48, 420, 30), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "LeonDL")
+            painter.drawText(QRectF(left + logo_size + 14, top + 6, 360, 30), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "LeonDL")
 
-            painter.setPen(self._color(self.theme.muted))
             subtitle = QFont("Tahoma", 9)
+            painter.setPen(self._color(self.theme.muted))
             painter.setFont(subtitle)
-            painter.drawText(QRectF(116, 78, 430, 24), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("Universal media workspace", "فضای هوشمند دانلود رسانه"))
+            painter.drawText(QRectF(left + logo_size + 14, top + 36, 380, 22), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("Universal media workspace", "فضای هوشمند دانلود رسانه"))
 
-            badge = QRectF(596, 58, 66, 28)
+            badge_w = 64.0
+            badge = QRectF(right - badge_w, top + 4, badge_w, 26)
             painter.setPen(QPen(self._color(self.theme.border), 1.0))
             painter.setBrush(self._color(self.theme.control_hover))
-            painter.drawRoundedRect(badge, 10.0, 10.0)
-            painter.setPen(self._color(self.theme.accent))
+            painter.drawRoundedRect(badge, 9.0, 9.0)
             badge_font = QFont("Segoe UI", 8)
             badge_font.setBold(True)
+            painter.setPen(self._color(self.theme.accent))
             painter.setFont(badge_font)
             painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, self.version)
 
-            card = QRectF(54, 130, 612, 188)
+            # --- Inner content card (centered, fully inside frame) ---
+            card_top = top + logo_size + 22
+            card = QRectF(left, card_top, content_w, bottom - card_top - 8)
             painter.setPen(QPen(self._color(self.theme.border), 1.0))
-            painter.setBrush(self._color(self.theme.input_bg))
-            painter.drawRoundedRect(card, 17.0, 17.0)
+            painter.setBrush(self._color(self.theme.glass_strong))
+            painter.drawRoundedRect(card, 18.0, 18.0)
 
-            painter.setPen(self._color(self.theme.text))
+            # Inner padding.
+            pad = 22.0
+            il = card.left() + pad
+            ir = card.right() - pad
+            it = card.top() + pad
+            ib = card.bottom() - pad
+            inner_w = ir - il
+
             heading = QFont("Tahoma", 13)
             heading.setBold(True)
+            painter.setPen(self._color(self.theme.text))
             painter.setFont(heading)
-            painter.drawText(QRectF(80, 148, 540, 30), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("Preparing your workspace", "در حال آماده‌سازی فضای کار"))
+            painter.drawText(QRectF(il, it, inner_w, 30), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("Preparing your workspace", "در حال آماده‌سازی فضای کار"))
 
-            painter.setPen(self._color(self.theme.muted))
             body = QFont("Tahoma", 9)
+            painter.setPen(self._color(self.theme.muted))
             painter.setFont(body)
-            painter.drawText(QRectF(80, 180, 540, 26), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("Loading the interface without opening a console window.", "رابط برنامه بدون نمایش پنجره CMD بارگذاری می‌شود."))
+            painter.drawText(QRectF(il, it + 34, inner_w, 26), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("Loading the interface without opening a console window.", "رابط برنامه بدون نمایش پنجره CMD بارگذاری می‌شود."))
 
-            painter.setPen(self._color(self.theme.accent))
             label_font = QFont("Segoe UI", 8)
             label_font.setBold(True)
+            painter.setPen(self._color(self.theme.accent))
             painter.setFont(label_font)
-            painter.drawText(QRectF(80, 219, 120, 18), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("STARTUP", "راه‌اندازی"))
+            painter.drawText(QRectF(il, it + 72, 120, 18), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("STARTUP", "راه‌اندازی"))
 
-            track_left = 82.0
-            track_right = 638.0
-            track_y = 262.0
-            track_width = track_right - track_left
+            # Progress track (inside card, with padding from edges).
+            track_left = il + 2
+            track_right = ir - 2
+            track_y = it + 104
             painter.setPen(self._round_pen(self._color(self.theme.progress_bg), 7.0))
             painter.drawLine(track_left, track_y, track_right, track_y)
             painter.setPen(self._round_pen(self._with_alpha(self.theme.control_hover, 120 if self.theme.dark else 86), 1.0))
             painter.drawLine(track_left, track_y - 2, track_right, track_y - 2)
 
-            painter.setPen(self._color(self.theme.muted))
+            # Footer note (inside frame, below the card, centered).
             footer = QFont("Tahoma", 8)
+            painter.setPen(self._color(self.theme.muted))
             painter.setFont(footer)
-            painter.drawText(QRectF(54, 340, 560, 24), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, self._tr("The splash closes when the main window is ready.", "با آماده‌شدن پنجره اصلی، اسپلش خودکار بسته می‌شود."))
+            footer_rect = QRectF(left, bottom - 24, content_w, 22)
+            painter.drawText(footer_rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignHCenter, self._tr("The splash closes when the main window is ready.", "با آماده‌شدن پنجره اصلی، اسپلش خودکار بسته می‌شود."))
         finally:
             if painter.isActive():
                 painter.end()

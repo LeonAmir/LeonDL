@@ -42,3 +42,9 @@ temp/
 
 # Internal developer documentation (not published)
 AI_DEVELOPER_GUIDE.md
+
+# Updatable media engines (downloaded at runtime, per-machine)
+engines/
+
+# Local thumbnail/thumbnail-test fixtures
+_thumb_test/

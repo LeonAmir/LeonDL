@@ -18,14 +18,24 @@ def _native_host_mode() -> bool:
 # Native Messaging must own stdout from the first byte. Dispatch before runtime
 # logging, bootstrap, Qt, or any dependency that could print to the protocol.
 if _native_host_mode():
+    # Engines must resolve before the bridge imports yt-dlp-backed modules.
+    from core.engine_loader import activate_engines
+
+    activate_engines()
     from core.browser_bridge import run_native_host
 
     raise SystemExit(run_native_host(sys.argv))
 
 
+# Prefer the updatable engine directory (see core/engine_loader.py) over the
+# copy bundled inside the frozen EXE, so in-app yt-dlp updates actually apply.
+from core.engine_loader import activate_engines as _activate_engines
+
+_ENGINES_ROOT = _activate_engines()
+
 from bootstrap import SetupReport, ensure_environment
 
-APP_VERSION = "2.6.8"
+APP_VERSION = "2.7.0"
 
 
 def _install_runtime_logging() -> None:

@@ -125,7 +125,7 @@ from ui.widgets import (
 )
 
 APP_NAME = "LeonDL"
-APP_VERSION = "2.6.8"
+APP_VERSION = "2.7.0"
 
 AUTH_CHOICES = {
     "none": ("بدون کوکی", "No cookies"),
@@ -3331,7 +3331,11 @@ class MainWindow(QMainWindow):
         }.get(key, "")
 
     def _package_action_available(self, key: str) -> tuple[bool, str]:
-        if getattr(sys, "frozen", False) and key in {"yt_dlp", "yt_dlp_ejs", "curl_cffi", "pyinstaller"}:
+        # yt-dlp / yt-dlp-ejs install into <exe_dir>/engines so they CAN be
+        # updated from inside the frozen EXE (pure-python wheels, no pip).
+        if getattr(sys, "frozen", False) and key in {"yt_dlp", "yt_dlp_ejs"}:
+            return True, ""
+        if getattr(sys, "frozen", False) and key in {"curl_cffi", "pyinstaller"}:
             return False, self._t("در نسخهٔ EXE، این ابزار همراه نسخهٔ جدید LeonDL به‌روزرسانی می‌شود.")
         if key in {"ffmpeg", "deno", "apkeep"} and os.name != "nt":
             return False, self._t("نصب خودکار این ابزار فقط در Windows در دسترس است.")
