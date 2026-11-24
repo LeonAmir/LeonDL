@@ -21,7 +21,7 @@ def main() -> None:
     manifest = json.loads((root / "chrome_extension" / "manifest.json").read_text(encoding="utf-8"))
     expected_id = "cilmnmiidbeningdcggocddbpjmmclmn"
     assert manifest["manifest_version"] == 3
-    assert manifest["version"] == "2.7.0"
+    assert manifest["version"] == "2.7.1"
     assert extension_id_from_key(manifest["key"]) == expected_id
     assert "nativeMessaging" in manifest["permissions"]
     assert "cookies" in manifest["permissions"]
@@ -36,8 +36,9 @@ def main() -> None:
     assert "cookiesForUserAction" in background_js
 
     with tempfile.TemporaryDirectory(prefix="leon-browser-bridge-") as temporary_home:
-        previous_home = os.environ.get("HOME")
-        os.environ["HOME"] = temporary_home
+        home_key = "USERPROFILE" if os.name == "nt" else "HOME"
+        previous_home = os.environ.get(home_key)
+        os.environ[home_key] = temporary_home
         try:
             import core.auth_store as auth_store
             import core.browser_bridge as bridge
@@ -48,6 +49,16 @@ def main() -> None:
             assert bridge.EXTENSION_ORIGIN == f"chrome-extension://{expected_id}/"
             token = bridge.pairing_token()
             assert len(token) >= 24
+            prefs = bridge.CONFIG_DIR / "settings.json"
+            message = {"type": "ping", "pairingToken": token}
+            for palette in ("aurora", "obsidian", "royal_navy", "light", "youtube"):
+                prefs.write_text(json.dumps({"theme": palette}), encoding="utf-8")
+                reply = bridge._handle_native_message(message)
+                assert reply["theme"] == palette
+                assert set(reply) == {"ok", "version", "app", "theme"}
+            prefs.write_text("{invalid", encoding="utf-8")
+            assert bridge._handle_native_message(message)["theme"] == "youtube"
+            prefs.unlink()
 
             cookies = [
                 {
@@ -141,9 +152,9 @@ def main() -> None:
 
             release_dir = Path(temporary_home) / "release"
             release_dir.mkdir()
-            (release_dir / "VERSION").write_text("2.7.0\n", encoding="utf-8")
-            native_exe = release_dir / "LeonDL-Native-Host-2.7.0.exe"
-            gui_exe = release_dir / "LeonDL-2.7.0.exe"
+            (release_dir / "VERSION").write_text("2.7.1\n", encoding="utf-8")
+            native_exe = release_dir / "LeonDL-Native-Host-2.7.1.exe"
+            gui_exe = release_dir / "LeonDL-2.7.1.exe"
             native_exe.write_bytes(b"native")
             gui_exe.write_bytes(b"gui")
             previous_executable = bridge.sys.executable
@@ -161,9 +172,9 @@ def main() -> None:
                     delattr(bridge.sys, "frozen")
         finally:
             if previous_home is None:
-                os.environ.pop("HOME", None)
+                os.environ.pop(home_key, None)
             else:
-                os.environ["HOME"] = previous_home
+                os.environ[home_key] = previous_home
 
     print("Browser bridge smoke test: OK")
 

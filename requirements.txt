@@ -1,8 +1,9 @@
-# Qt desktop interface
-PySide6>=6.7,<7
+# WebView desktop shell
+pywebview>=6,<7
 
 # Downloader core, JavaScript challenge support, and browser impersonation.
 # PornHub's current extractor requires yt-dlp 2026.06.09+ and curl_cffi.
 yt-dlp[default,curl-cffi]>=2026.6.9
 yt-dlp-ejs
 curl-cffi>=0.13
+packaging>=24

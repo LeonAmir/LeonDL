@@ -263,6 +263,13 @@ def build_stylesheet(theme: Theme) -> str:
         border-radius: 15px;
     }}
     QFrame[previewItem="true"]:hover {{ background: {theme.input_focus}; border-color: {theme.accent_hover}; }}
+    QPushButton#removePreviewButton {{
+        background: transparent; border: 1px solid transparent; border-radius: 13px;
+        min-width: 0; min-height: 0; padding: 0; font-size: 15pt; color: {theme.muted};
+    }}
+    QPushButton#removePreviewButton:hover, QPushButton#removePreviewButton:focus {{
+        background: {theme.control_hover}; border-color: {theme.border}; color: {theme.danger};
+    }}
     QLabel#previewThumb {{
         color: {theme.muted};
         background: {theme.surface};

@@ -1,8 +1,8 @@
-# LeonDL — نسخهٔ ۲.۶.۱
+# LeonDL — نسخهٔ ۲.۷.۱
 
 **فارسی** | [English](README.md)
 
-دانلودر دسکتاپی چندسرویسه و چندزبانه برای **yt-dlp**، ساخته‌شده با **PySide6 (Qt)**. به YouTube محدود نیست؛ لینک هر سرویسی که extractorهای نسخهٔ نصب‌شدهٔ yt-dlp پشتیبانی کنند را می‌پذیرد: YouTube، Instagram، TikTok، X/Twitter، Vimeo، Twitch، SoundCloud، Facebook، Reddit، Dailymotion و…
+دانلودر دسکتاپی چندسرویسه و چندزبانه برای **yt-dlp**، با بک‌اند **Python** و رابط **HTML/CSS/JavaScript**. به YouTube محدود نیست؛ لینک هر سرویسی که extractorهای نسخهٔ نصب‌شدهٔ yt-dlp پشتیبانی کنند را می‌پذیرد: YouTube، Instagram، TikTok، X/Twitter، Vimeo، Twitch، SoundCloud، Facebook، Reddit، Dailymotion و…
 
 > مستندات کامل پروژه در مخزن قرار دارد — فایل‌های ریلیز فقط شامل README، VERSION و LICENSE هستند.
 
@@ -27,7 +27,7 @@
 - Python 3.10 یا جدیدتر + pip
 - `yt-dlp[default,curl-cffi]` نسخهٔ 2026.06.09 یا جدیدتر (برای PornHub و سرویس‌های نیازمند browser impersonation)
 - `yt-dlp-ejs` و `curl_cffi` (پشتیبانی JavaScript challenge)
-- PySide6، FFmpeg، FFprobe، Deno
+- pywebview، محیط اجرای Microsoft Edge WebView2 در ویندوز، FFmpeg، FFprobe و Deno
 
 ## نصب و اجرا در Windows
 
@@ -35,7 +35,7 @@
 2. روی `LeonDL.vbs` دوبار کلیک کنید — برنامه بدون نمایش پنجرهٔ CMD اجرا می‌شود.
 3. در اولین اجرا، `.venv` و بسته‌های اصلی خودکار آماده می‌شوند؛ ابزارهای جانبی (FFmpeg و…) بعداً از بخش Packages and Tools نصب می‌شوند.
 
-> **خروجی EXE ویندوز (پیشنهادی برای کاربر عادی):** فایل ZIP را Extract کنید و مستقیم `LeonDL-2.7.0.exe` را اجرا کنید — نیازی به اجرای سورس یا `.bat`/`.vbs` نیست. در اولین اجرا، EXE ابزارهای FFmpeg/FFprobe و Deno را چک و در صورت نبود، خودکار در پس‌زمینه نصب می‌کند.
+> **خروجی EXE ویندوز (پیشنهادی برای کاربر عادی):** فایل ZIP را Extract کنید و مستقیم `LeonDL-2.7.1.exe` را اجرا کنید — نیازی به اجرای سورس یا `.bat`/`.vbs` نیست. در اولین اجرا، EXE ابزارهای FFmpeg/FFprobe و Deno را چک و در صورت نبود، خودکار در پس‌زمینه نصب می‌کند.
 
 ابزارهای جانبی:
 

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from PySide6.QtCore import QThread, Signal
+from core.workers import Worker, Signal
 
 from core.downloader import create_temporary_cookie_file
 
@@ -74,7 +74,7 @@ def _friendly_url(entry: dict[str, Any], service_key: str) -> str:
     return identifier
 
 
-class SearchWorker(QThread):
+class SearchWorker(Worker):
     started_search = Signal(str)
     ready = Signal(list)
     failed = Signal(str)

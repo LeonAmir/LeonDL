@@ -14,6 +14,25 @@ const elements = {
 };
 
 let currentTab = null;
+let themeTimer = null;
+const THEMES = new Set(["aurora", "obsidian", "royal_navy", "light", "youtube"]);
+
+function applyTheme(value) {
+  if (THEMES.has(value)) document.documentElement.dataset.theme = value;
+}
+
+async function syncTheme(pairingToken, response) {
+  applyTheme(response?.theme);
+  if (THEMES.has(response?.theme)) await chrome.storage.local.set({desktopTheme: response.theme});
+  if (themeTimer !== null) clearTimeout(themeTimer);
+  themeTimer = setTimeout(async () => {
+    try {
+      await syncTheme(pairingToken, await pingLeon(pairingToken));
+    } catch {
+      themeTimer = null;
+    }
+  }, 4000);
+}
 
 function showStatus(message, kind = "") {
   elements.status.textContent = message || "";
@@ -39,7 +58,8 @@ async function checkConnection() {
     return;
   }
   try {
-    await pingLeon(settings.pairingToken);
+    const response = await pingLeon(settings.pairingToken);
+    await syncTheme(settings.pairingToken, response);
     connection("Connected to Leon", "ready");
     elements.pairingPanel.classList.add("hidden");
     await chrome.storage.session.set({autoPopupShown: false});
@@ -117,8 +137,9 @@ elements.savePairing.addEventListener("click", async () => {
     return;
   }
   try {
-    await pingLeon(token);
+    const response = await pingLeon(token);
     await chrome.storage.local.set({pairingToken: token});
+    await syncTheme(token, response);
     elements.pairingPanel.classList.add("hidden");
     elements.pairingToken.value = "";
     connection("Connected to Leon", "ready");
@@ -132,6 +153,8 @@ elements.sendOpen.addEventListener("click", () => submit("open"));
 elements.sendQueue.addEventListener("click", () => submit("queue"));
 
 (async () => {
+  const storedTheme = await chrome.storage.local.get({desktopTheme: 'youtube'});
+  applyTheme(storedTheme.desktopTheme);
   currentTab = await activeTab();
   elements.pageTitle.textContent = currentTab?.title || "Current page";
   elements.pageUrl.textContent = currentTab?.url || "";

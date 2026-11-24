@@ -47,3 +47,20 @@ button:disabled { cursor: wait; opacity: .6; }
 .status.error { color: var(--danger); }
 .status.warning { color: var(--warning); }
 .hidden { display: none; }
+
+/* Liquid Glass palettes shared visually with the desktop. */
+:root{--base:#090d1b;--glow1:#282350;--glow2:#173b56;--panel:#293552;--field:#10192d;--tone1:#f0c878;--tone2:#ffe6a6;--toneText:#161021;--status:#99e8df}
+:root[data-theme=obsidian]{--base:#090a0e;--glow1:#3b2c16;--glow2:#192533;--panel:#2b292d;--field:#14141a;--tone1:#d6ad60;--tone2:#ffe7a8;--toneText:#100e09;--status:#e9cd90}
+:root[data-theme=royal_navy]{--base:#071326;--glow1:#0e3c68;--glow2:#192443;--panel:#1f3c59;--field:#0e1c31;--tone1:#e3bc68;--tone2:#ffe09a;--toneText:#111c2a;--status:#a7e9fa}
+:root[data-theme=youtube]{--base:#101013;--glow1:#471421;--glow2:#302431;--panel:#30272f;--field:#151316;--tone1:#ff0033;--tone2:#de2044;--toneText:#fff;--status:#ff9bad}
+:root[data-theme=light]{color-scheme:light;--base:#f5f2e9;--glow1:#e9d6b2;--glow2:#cfdeed;--panel:#fffefb;--field:#fffdf9;--text:#292827;--muted:#5b5b63;--line:#60533933;--tone1:#eed8a3;--tone2:#f4e5be;--toneText:#33250f;--status:#205a52}
+:root{--bg:var(--base);--surface:color-mix(in srgb,var(--panel) 78%,transparent);--surface-2:color-mix(in srgb,var(--panel) 63%,var(--field));--border:var(--line,#b9caff24);--accent:var(--tone1)}
+:root:not([data-theme]),:root[data-theme=youtube]{--base:#101013;--glow1:#471421;--glow2:#302431;--panel:#30272f;--field:#151316;--tone1:#ff0033;--tone2:#de2044;--toneText:#fff}
+:root[data-theme=light]{--success:#207442;--danger:#a61f38;--warning:#815317;--accent:#825903}
+body{background:radial-gradient(ellipse at top right,var(--glow1),transparent 70%),radial-gradient(ellipse at bottom left,var(--glow2),transparent 72%),var(--bg)}
+.page-card,.pairing{box-shadow:inset 0 1px #ffffff29;backdrop-filter:blur(14px)}
+input[type="password"]{background:var(--field)}
+input[type="password"]:focus{border-color:var(--accent)}
+.primary{color:var(--toneText);background:linear-gradient(135deg,var(--tone1),var(--tone2))}
+.primary:hover{background:linear-gradient(135deg,var(--tone2),var(--tone1))}
+.secondary:hover{background:color-mix(in srgb,var(--surface-2) 82%,var(--tone1))}

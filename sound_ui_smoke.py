@@ -32,7 +32,9 @@ def main() -> int:
     assert 'self._play_app_sound("queue_complete")' in window
     assert 'self._play_app_sound("notification")' in window
     assert 'self._play_app_sound("warning")' in window
-    assert '--add-data "assets;assets"' in build
+    assert 'windows_gui.spec.in' in build
+    spec = (root / "windows_gui.spec.in").read_text(encoding="utf-8")
+    assert "('assets', 'assets')" in spec
     print("Sound UI wiring smoke test: OK")
     return 0
 

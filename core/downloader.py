@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from PySide6.QtCore import QThread, Signal
+from core.workers import Worker, Signal
 
 from core.optional_engines import (
     OptionalEngineError,
@@ -165,24 +165,11 @@ def _numeric_version(value: str) -> tuple[int, ...]:
 
 
 def installed_yt_dlp_version() -> str:
-    # The updatable engine directory wins over the copy bundled in the EXE.
     try:
-        from core.engine_loader import activate_engines, engine_installed_version
-
-        activate_engines()
-        version = engine_installed_version("yt_dlp")
-        if version:
-            return version
-    except Exception:
-        pass
-    try:
-        return importlib.metadata.version("yt-dlp")
-    except Exception:
-        try:
-            from yt_dlp.version import __version__
-            return str(__version__)
-        except Exception:
-            return ""
+        from yt_dlp.version import __version__
+        return str(__version__)
+    except ImportError:
+        return ""
 
 
 def browser_impersonation_available() -> bool:
@@ -582,6 +569,30 @@ SIZE_CONFIDENCE_ORDER = {
     "estimated": 2,
     "unknown": 3,
 }
+
+
+VIDEO_CODECS = {
+    "h264": ("H.264 (AVC)", r"^(avc[13]|h264)(\.|$)"),
+    "hevc": ("H.265 (HEVC)", r"^(hevc|h265|hev1|hvc1)(\.|$)"),
+    "vp9": ("VP9", r"^(vp9|vp09)(\.|$)"),
+    "av1": ("AV1", r"^(av1|av01)(\.|$)"),
+    "vp8": ("VP8", r"^(vp8|vp08)(\.|$)"),
+    "mpeg4": ("MPEG-4", r"^(mp4v|mpeg4)(\.|$)"),
+}
+
+
+def available_video_codecs(info: dict[str, Any]) -> list[str]:
+    formats = compact_media_formats(info)
+    return [key for key, (_, pattern) in VIDEO_CODECS.items()
+            if any(re.search(pattern, str(fmt.get("vcodec") or ""), re.IGNORECASE) for fmt in formats)]
+
+
+def _codec_selector(selector: str, codec: str) -> str:
+    pattern = VIDEO_CODECS[codec][1]
+    # Drop audio-only fallback branches and constrain every video candidate.
+    video = re.compile(r"^(?:bv\*?|bestvideo\*?|b|best)(?=\[|\+|$)")
+    return "/".join(video.sub(lambda match: f"{match[0]}[vcodec~='{pattern}']", branch)
+                    for branch in selector.split("/") if video.match(branch))
 
 
 def compact_media_formats(info: dict[str, Any] | None) -> list[dict[str, Any]]:
@@ -1066,7 +1077,7 @@ class SignalLogger:
         self.signal.emit(prefix + clean_message(message))
 
 
-class DownloadWorker(QThread):
+class DownloadWorker(Worker):
     log = Signal(str)
     progress = Signal(dict)
     postprocess = Signal(str)
@@ -1091,6 +1102,9 @@ class DownloadWorker(QThread):
         self.language = "en" if language == "en" else "fa"
         self._cancel_event = threading.Event()
         self._progress_samples: dict[str, tuple[float, int]] = {}
+        self.received_by_url: dict[str, int] = {}
+        self._transfer_samples: dict[str, int] = {}
+        self._transfer_url = ""
 
     def cancel(self) -> None:
         self._cancel_event.set()
@@ -1101,6 +1115,7 @@ class DownloadWorker(QThread):
             return
 
         options = dict(self.options)
+        self.video_codecs = dict(options.pop("_leon_video_codecs", {}))
         self.audio_language = str(options.pop("_leon_audio_language", "") or "").strip()
         self.spotify_format = str(options.pop("_leon_spotify_format", "mp3") or "mp3").strip()
         self.spotify_client_id = str(options.pop("_leon_spotify_client_id", "") or "").strip()
@@ -1132,6 +1147,8 @@ class DownloadWorker(QThread):
                         raise RuntimeError(
                             "[PornHub] HTTP Error 410: Gone. Browser impersonation support is not ready. " + details
                         )
+                self._transfer_url = url
+                self._transfer_samples.clear()
                 self._download_routed(url, options)
                 if self._cancel_event.is_set():
                     raise DownloadCancelled
@@ -1209,7 +1226,7 @@ class DownloadWorker(QThread):
         try:
             self._download_with_fallback(url, options)
         except Exception as exc:
-            if self.optional_gallery_fallback and gallery_dl_available() and (is_reddit_url(url) or is_instagram_url(url)):
+            if not getattr(self, "video_codecs", {}).get(url) and self.optional_gallery_fallback and gallery_dl_available() and (is_reddit_url(url) or is_instagram_url(url)):
                 self.log.emit(
                     "yt-dlp could not expose a downloadable media format; trying gallery-dl"
                     if self.language == "en" else
@@ -1252,6 +1269,10 @@ class DownloadWorker(QThread):
                 ("single", "best[ext=mp4]/best"),
                 ("general", "bestvideo*+bestaudio/best"),
             ]
+        codec = getattr(self, "video_codecs", {}).get(url)
+        if codec in VIDEO_CODECS:
+            attempts = [(label, filtered) for label, selector in attempts
+                        if (filtered := _codec_selector(selector or "", codec))]
         seen: set[str | None] = set()
         last_error: Exception | None = None
 
@@ -1297,6 +1318,13 @@ class DownloadWorker(QThread):
                 if not _is_format_unavailable(exc):
                     raise
 
+        if codec in VIDEO_CODECS:
+            label = VIDEO_CODECS[codec][0]
+            raise RuntimeError(
+                f"No downloadable video uses {label} with the selected quality."
+                if self.language == "en" else f"ویدئویی با کدک {label} و کیفیت انتخاب‌شده موجود نیست."
+            ) from last_error
+
         diagnostics = self._inspect_available_media(url, options)
         if diagnostics == 0:
             if url_domain(url) in {"youtube.com", "youtu.be"} or url_domain(url).endswith(".youtube.com"):
@@ -1330,11 +1358,19 @@ class DownloadWorker(QThread):
             return None
 
     def _progress_hook(self, data: dict[str, Any]) -> None:
+        status = data.get("status")
+        info = data.get("info_dict") or {}
+        received = data.get("downloaded_bytes")
+        if status in {"downloading", "finished"} and self._transfer_url and isinstance(received, (int, float)):
+            key = str(data.get("filename") or info.get("format_id") or "active")
+            previous = self._transfer_samples.get(key, 0)
+            if status == "downloading" or key in self._transfer_samples:
+                self._transfer_samples[key] = int(received)
+                delta = max(0, int(received) - previous)
+                self.received_by_url[self._transfer_url] = self.received_by_url.get(self._transfer_url, 0) + delta
         if self._cancel_event.is_set():
             raise DownloadCancelled
 
-        status = data.get("status")
-        info = data.get("info_dict") or {}
         if status == "downloading":
             downloaded = data.get("downloaded_bytes") or 0
             total = data.get("total_bytes") or data.get("total_bytes_estimate")
@@ -1423,7 +1459,7 @@ class DownloadWorker(QThread):
             self.log.emit((f"Post-processing finished: {name}" if self.language == "en" else f"پردازش نهایی شد: {name}"))
 
 
-class PreviewWorker(QThread):
+class PreviewWorker(Worker):
     """Fetch previews for every supplied URL without blocking the GUI.
 
     One worker and one YoutubeDL context are shared across the whole batch. This

@@ -8,7 +8,7 @@ function Invoke-NativeChecked {
   )
   & $FilePath @Arguments
   if ($LASTEXITCODE -ne 0) {
-    throw "Command failed with exit code $LASTEXITCODE: $FilePath $($Arguments -join ' ')"
+    throw "Command failed with exit code ${LASTEXITCODE}: $FilePath $($Arguments -join ' ')"
   }
 }
 
@@ -24,32 +24,32 @@ Invoke-NativeChecked python later_store_smoke.py
 Invoke-NativeChecked python optional_engines_smoke.py
 Invoke-NativeChecked python cancel_process_smoke.py
 Invoke-NativeChecked python sound_events_smoke.py
-Invoke-NativeChecked python sound_ui_smoke.py
 Invoke-NativeChecked python browser_bridge_smoke.py
 Invoke-NativeChecked python extension_cookie_sync_smoke.py
 Invoke-NativeChecked python prerequisite_smoke.py
+Invoke-NativeChecked python engine_update_smoke.py
+Invoke-NativeChecked python desktop_smoke.py
 Invoke-NativeChecked python -m pip install -U pyinstaller
 
-Invoke-NativeChecked python -m PyInstaller `
-  --noconfirm `
-  --clean `
-  --onefile `
-  --windowed `
-  --name $appName `
-  --icon "assets\app_icon.ico" `
-  --add-data "assets;assets" `
-  --collect-all yt_dlp `
-  --collect-all yt_dlp_ejs `
-  app.py
+# Resolve Windows system DLLs ahead of unrelated tool libraries on PATH.
+$originalPath = $env:Path
+try {
+  $env:Path = "$(Join-Path $env:SystemRoot 'System32');$originalPath"
+  $appSpec = "$appName.spec"
+  Copy-Item -LiteralPath "windows_gui.spec.in" -Destination $appSpec -Force
+  Invoke-NativeChecked python -m PyInstaller --noconfirm --clean $appSpec
 
-Invoke-NativeChecked python -m PyInstaller `
-  --noconfirm `
-  --clean `
-  --onefile `
-  --console `
-  --name $hostName `
-  --icon "assets\app_icon.ico" `
-  native_host_entry.py
+  Invoke-NativeChecked python -m PyInstaller `
+    --noconfirm `
+    --clean `
+    --onefile `
+    --console `
+    --name $hostName `
+    --icon "assets\app_icon.ico" `
+    native_host_entry.py
+} finally {
+  $env:Path = $originalPath
+}
 
 $releaseDocs = @("README.md", "VERSION", "LICENSE")
 foreach ($doc in $releaseDocs) {

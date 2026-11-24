@@ -453,7 +453,7 @@ EN.update({
     'اجرای JavaScript موردنیاز YouTube و بعضی استخراج‌کننده‌ها': 'Runs JavaScript required by YouTube and some extractors',
     'ساخت نسخهٔ اجرایی Windows از سورس Python': 'Builds a Windows executable from the Python source',
     'ابزار کمکی LeonDL': 'LeonDL helper tool',
-    'در نسخهٔ EXE، این ابزار همراه نسخهٔ جدید LeonDL به‌روزرسانی می‌شود.': 'In the EXE build, this tool is updated with a newer LeonDL release.',
+    'برای مدیریت PyInstaller، Python را در Windows نصب و به PATH اضافه کنید.': 'Install Python on Windows and add it to PATH to manage PyInstaller.',
     'نصب خودکار این ابزار فقط در Windows در دسترس است.': 'Automatic installation of this tool is available only on Windows.',
     'WinGet برای نصب یا به‌روزرسانی این ابزار پیدا نشد.': 'WinGet was not found for installing or updating this tool.',
 })

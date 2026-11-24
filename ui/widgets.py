@@ -723,7 +723,7 @@ class TitleBar(QFrame):
         self.subtitle_label.setObjectName("appSubtitle")
         self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
-        self.version_badge = QLabel("2.7.0")
+        self.version_badge = QLabel("2.7.1")
         self.version_badge.setObjectName("versionBadge")
         self.version_badge.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
 

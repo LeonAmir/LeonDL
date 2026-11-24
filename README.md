@@ -1,8 +1,8 @@
-# LeonDL — v2.7.0
+# LeonDL — v2.7.1
 
 [فارسی](README.fa.md) | **English**
 
-A multi-service, bilingual desktop downloader for **yt-dlp**, built with **PySide6 (Qt)**. It is not limited to YouTube — it accepts links from any service supported by the installed yt-dlp extractors: YouTube, Instagram, TikTok, X/Twitter, Vimeo, Twitch, SoundCloud, Facebook, Reddit, Dailymotion and more.
+A multi-service, bilingual desktop downloader for **yt-dlp**, with a **Python** backend and an **HTML/CSS/JavaScript** interface. It is not limited to YouTube — it accepts links from any service supported by the installed yt-dlp extractors: YouTube, Instagram, TikTok, X/Twitter, Vimeo, Twitch, SoundCloud, Facebook, Reddit, Dailymotion and more.
 
 > Full project documentation lives in the repository — release ZIPs contain README, VERSION and LICENSE only.
 
@@ -27,7 +27,7 @@ A multi-service, bilingual desktop downloader for **yt-dlp**, built with **PySid
 - Python 3.10 or newer + pip
 - `yt-dlp[default,curl-cffi]` version 2026.06.09 or newer (required for PornHub and services needing browser impersonation)
 - `yt-dlp-ejs` and `curl_cffi` (JavaScript challenge support)
-- PySide6, FFmpeg, FFprobe, Deno
+- pywebview, Microsoft Edge WebView2 Runtime on Windows, FFmpeg, FFprobe and Deno
 
 ## Install & run on Windows
 
@@ -35,7 +35,7 @@ A multi-service, bilingual desktop downloader for **yt-dlp**, built with **PySid
 2. Double-click `LeonDL.vbs` — the app runs without a visible CMD window.
 3. On first run, `.venv` and the core packages are prepared automatically; auxiliary tools (FFmpeg, etc.) are installed later from the Packages and Tools section.
 
-> **Windows EXE build (recommended for end users):** extract the ZIP and run `LeonDL-2.7.0.exe` directly — no source launch or `.bat`/`.vbs` step. On first run the EXE checks FFmpeg/FFprobe and Deno and installs any missing tool automatically in the background.
+> **Windows EXE build (recommended for end users):** extract the ZIP and run `LeonDL-2.7.1.exe` directly — no source launch or `.bat`/`.vbs` step. On first run the EXE checks FFmpeg/FFprobe and Deno and installs any missing tool automatically in the background.
 
 Helper files:
 

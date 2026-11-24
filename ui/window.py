@@ -64,7 +64,7 @@ from core.browser_bridge import (
 )
 from core.history_store import HistoryStore
 from core.later_store import LaterStore
-from core.package_manager import PackageActionWorker, PackageStatusWorker
+from core.package_manager import PackageActionWorker, PackageStatusWorker, build_environment_python, build_python
 from core.updater import (
     ReleaseInfo,
     UpdateCheckWorker,
@@ -90,6 +90,8 @@ from core.sound_events import (
     normalize_sound_theme,
 )
 from core.downloader import (
+    VIDEO_CODECS,
+    available_video_codecs,
     BROWSERS,
     PRESETS,
     DownloadWorker,
@@ -109,6 +111,8 @@ from core.downloader import (
     resolve_javascript_runtime,
     yt_dlp,
 )
+from ui.download_dashboard import create_download_dashboard
+from ui.web_controls import web_control
 from ui.i18n import LANGUAGES, tr, translate_known
 from ui.native_blur import disable_native_blur, enable_native_blur
 from ui.theme import THEMES, YOUTUBE, Theme, build_message_box_stylesheet, build_stylesheet, theme_from_name
@@ -125,7 +129,7 @@ from ui.widgets import (
 )
 
 APP_NAME = "LeonDL"
-APP_VERSION = "2.7.0"
+APP_VERSION = "2.7.1"
 
 AUTH_CHOICES = {
     "none": ("بدون کوکی", "No cookies"),
@@ -209,6 +213,7 @@ def soft_wrap_text(value: object, chunk: int = 38) -> str:
 
 
 class PreviewItemCard(QFrame):
+    remove_requested = Signal(str)
     """Compact, wrapping preview row used by the batch preview list."""
 
     def __init__(self, index: int, url: str, language: str, parent: QWidget | None = None) -> None:
@@ -253,6 +258,13 @@ class PreviewItemCard(QFrame):
         top.addWidget(self.service)
         top.addStretch(1)
         top.addWidget(self.status)
+        remove = QPushButton("×")
+        remove.setObjectName("removePreviewButton")
+        remove.setFixedSize(26, 26)
+        remove.setToolTip("Remove preview and link" if self.language == "en" else "حذف پیش‌نمایش و لینک")
+        remove.setAccessibleName(remove.toolTip())
+        remove.clicked.connect(lambda: self.remove_requested.emit(self.url))
+        top.addWidget(remove)
 
         self.title = ResponsiveLabel(soft_wrap_text(url))
         self.title.setObjectName("previewItemTitle")
@@ -285,6 +297,10 @@ class PreviewItemCard(QFrame):
         body.addWidget(self.audio)
         body.addWidget(self.subtitles)
         body.addWidget(self.size)
+        self.video_codec = QComboBox()
+        self.video_codec.setAccessibleName("Video codec" if self.language == "en" else "کدک ویدیو")
+        self.video_codec.hide()
+        body.addWidget(self.video_codec)
         layout.addWidget(self.image, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(body, 1)
 
@@ -542,6 +558,7 @@ class MainWindow(QMainWindow):
     def _on_main_page_changed(self, index: int) -> None:
         """Run expensive page-specific checks only when the page is first opened."""
         self._sync_main_nav(index)
+        self._sync_dashboard_visibility()
         item = self.main_nav.item(index) if hasattr(self, "main_nav") else None
         key = str(item.data(Qt.ItemDataRole.UserRole) or "") if item else ""
         if not key or key in self._initialized_pages:
@@ -583,6 +600,7 @@ class MainWindow(QMainWindow):
         content_row.setSpacing(9)
 
         nav_card = GlassCard()
+        self._native_nav_card = nav_card
         nav_card.setObjectName("sideNavCard")
         nav_card.setMinimumWidth(202)
         nav_card.setMaximumWidth(232)
@@ -609,7 +627,8 @@ class MainWindow(QMainWindow):
         download_layout = QVBoxLayout(download_page)
         download_layout.setContentsMargins(0, 0, 0, 0)
         download_layout.setSpacing(9)
-        download_layout.addWidget(self._build_command_bar())
+        self._native_download_commands = self._build_command_bar()
+        download_layout.addWidget(self._native_download_commands)
 
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.main_splitter.setObjectName("mainSplitter")
@@ -644,6 +663,11 @@ class MainWindow(QMainWindow):
         self.main_pages.currentChanged.connect(self._on_main_page_changed)
         self.main_nav.setCurrentRow(0)
 
+        self.download_dashboard = create_download_dashboard(self)
+        if self.download_dashboard is not None:
+            self.download_dashboard.hide()
+            download_layout.addWidget(self.download_dashboard, 1)
+
         content_row.addWidget(nav_card)
         content_row.addWidget(self.main_pages, 1)
         surface_layout.addLayout(content_row, 1)
@@ -651,6 +675,19 @@ class MainWindow(QMainWindow):
         self.toast = Toast(self.surface)
         self._refresh_action_icons()
         QTimer.singleShot(0, self._update_quick_stats)
+
+    def _sync_dashboard_visibility(self) -> None:
+        dashboard = getattr(self, "download_dashboard", None)
+        if dashboard is None:
+            return
+        available = dashboard.loaded
+        current = self.main_pages.currentIndex() == self.page_indexes.get("download")
+        self._native_nav_card.setVisible(not (available and current))
+        self._native_download_commands.setVisible(not available)
+        self.main_splitter.setVisible(not available)
+        dashboard.setVisible(available and current)
+        if available and current:
+            dashboard.refresh()
 
     def _build_command_bar(self) -> QWidget:
         """Compact, fixed-height command deck that never scrolls away."""
@@ -1288,6 +1325,14 @@ class MainWindow(QMainWindow):
         volume_row.setContentsMargins(0, 0, 0, 0)
         volume_row.addWidget(self.sound_volume_slider, 1)
         volume_row.addWidget(self.sound_volume_value)
+        self.web_volume = web_control("volume", 74)
+        if self.web_volume is not None:
+            volume_row.addWidget(self.web_volume, 1)
+            self.web_volume.hide()
+            self.web_volume.page().volume_changed.connect(self.sound_volume_slider.setValue)
+            self.web_volume.ready.connect(self.web_volume.show)
+            self.web_volume.ready.connect(self.sound_volume_slider.hide)
+            self.web_volume.ready.connect(self.sound_volume_value.hide)
         volume_host = QWidget()
         volume_host.setLayout(volume_row)
         top_grid.addWidget(QLabel(self._t("بلندی صدا")), 1, 0)
@@ -1323,6 +1368,7 @@ class MainWindow(QMainWindow):
         sound_layout.addWidget(reset_custom, 0, Qt.AlignmentFlag.AlignLeft if self.language == "en" else Qt.AlignmentFlag.AlignRight)
 
         self.sound_enabled_check.toggled.connect(self._sync_sound_controls)
+        self.sound_enabled_check.toggled.connect(self._sync_web_volume)
         self.sound_theme_combo.currentIndexChanged.connect(self._configure_sound_player)
         self.sound_volume_slider.valueChanged.connect(self._sound_volume_changed)
         for edit in self.sound_custom_edits.values():
@@ -1564,9 +1610,23 @@ class MainWindow(QMainWindow):
         for button in (refresh, redownload, open_folder, copy_url, clear):
             header.addWidget(button)
         card_layout.addLayout(header)
-        self.history_table = QTableWidget(0, 5)
+        self.history_usage = QLabel()
+        self.history_usage.setObjectName("historyUsageLabel")
+        self.history_usage.setToolTip(
+            "Media data reported by yt-dlp since tracking started"
+            if self.language == "en" else "دادهٔ رسانهٔ گزارش‌شده توسط yt-dlp از زمان شروع شمارش"
+        )
+        card_layout.addWidget(self.history_usage)
+        self.web_usage = web_control("usage", 91)
+        if self.web_usage is not None:
+            self.web_usage.hide()
+            card_layout.addWidget(self.web_usage)
+            self.web_usage.ready.connect(self.web_usage.show)
+            self.web_usage.ready.connect(self.history_usage.hide)
+        self.history_table = QTableWidget(0, 6)
         self.history_table.setHorizontalHeaderLabels([
             self._t("زمان"), self._t("عنوان"), self._t("سرویس"), self._t("فرمت"), self._t("پوشه"),
+            "Received" if self.language == "en" else "دادهٔ دریافتی",
         ])
         self.history_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.history_table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
@@ -2057,6 +2117,12 @@ class MainWindow(QMainWindow):
         self.progress_bar.setFormat(f"{self._digits(0)}%")
         status_layout.addWidget(self.detail_label)
         status_layout.addWidget(self.progress_bar)
+        self.web_progress = web_control("progress", 69)
+        if self.web_progress is not None:
+            self.web_progress.hide()
+            status_layout.addWidget(self.web_progress)
+            self.web_progress.ready.connect(self.web_progress.show)
+            self.web_progress.ready.connect(self.progress_bar.hide)
 
         stats = QHBoxLayout()
         stats.setSpacing(6)
@@ -2219,6 +2285,12 @@ class MainWindow(QMainWindow):
             self.preview_empty_graphic.set_theme(self.theme)
         if getattr(self, "speed_wave", None) is not None:
             self.speed_wave.set_theme(self.theme)
+        for name in ("web_progress", "web_usage", "web_volume"):
+            control = getattr(self, name, None)
+            if control is not None:
+                control.set_theme(self.theme, self.language)
+        self._sync_web_progress()
+        self._sync_web_volume()
         self._refresh_action_icons()
         self._refresh_nav_icons()
         self.surface.style().unpolish(self.surface)
@@ -2288,6 +2360,8 @@ class MainWindow(QMainWindow):
                 "info": dict(result.get("info") or {}),
                 "error": str(result.get("error") or ""),
                 "pixmap": None,
+                "video_codec": self.preview_cards[index].video_codec.currentData()
+                    if index < len(self.preview_cards) else None,
             }
             if 0 <= index < len(self.preview_cards):
                 pixmap = self.preview_cards[index].image.pixmap()
@@ -2398,6 +2472,7 @@ class MainWindow(QMainWindow):
                 self._merge_detected_audio_languages(list(info.get("audio_languages") or []), refresh=False)
                 self._render_card_subtitle_languages(card, list(info.get("subtitle_languages") or []))
                 self._merge_detected_subtitle_languages(list(info.get("subtitle_languages") or []), refresh=False)
+                self._render_card_codecs(card, info, str(saved.get("video_codec") or ""))
                 card.set_state("ready", self._t("آماده"))
                 self.preview_success_count += 1
             elif state_name == "error":
@@ -2483,6 +2558,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setRange(int(state.get("progress_min", 0)), int(state.get("progress_max", 1000)))
         self.progress_bar.setValue(int(state.get("progress_value", 0)))
         self.progress_bar.setFormat(str(state.get("progress_format", f"{self._digits(0)}%")))
+        self._sync_web_progress()
         self.size_value.setText(str(state.get("size", "—")))
         self.speed_value.setText(str(state.get("speed", "—")))
         self.eta_value.setText(translate_known(self.language, str(state.get("eta", "—"))))
@@ -2564,6 +2640,11 @@ class MainWindow(QMainWindow):
         old_widget = self.takeCentralWidget()
         self.queue_items = []
         self._initialized_pages = {"download"}
+        old_dashboard = getattr(self, "download_dashboard", None)
+        if old_dashboard is not None:
+            old_dashboard.timer.stop()
+            old_dashboard.loadFinished.disconnect(old_dashboard._loaded)
+        self.download_dashboard = None
         self._build_ui()
         self._install_wheel_scroll_guard()
         self._restore_ui_state(state)
@@ -2820,6 +2901,7 @@ class MainWindow(QMainWindow):
                 str(entry.get("service") or "—"),
                 str(entry.get("preset_label") or entry.get("preset") or "—"),
                 str(entry.get("output_dir") or "—"),
+                human_bytes(entry["received_bytes"]) if "received_bytes" in entry else "—",
             ]
             for column, value in enumerate(values):
                 item = QTableWidgetItem(value)
@@ -3227,6 +3309,11 @@ class MainWindow(QMainWindow):
         if not hasattr(self, "history_table"):
             return
         entries = self.history_store.load()
+        total = human_bytes(self.history_store.received_bytes())
+        label = "Total download data received" if self.language == "en" else "مجموع دادهٔ دریافتی دانلودها"
+        self.history_usage.setText(f"{label}  ·  {total}")
+        if self.web_usage is not None:
+            self.web_usage.set_state(text=total, label=label, caption=self.history_usage.toolTip())
         self.history_table.setRowCount(len(entries))
         for row, entry in enumerate(entries):
             values = [
@@ -3331,12 +3418,9 @@ class MainWindow(QMainWindow):
         }.get(key, "")
 
     def _package_action_available(self, key: str) -> tuple[bool, str]:
-        # yt-dlp / yt-dlp-ejs install into <exe_dir>/engines so they CAN be
-        # updated from inside the frozen EXE (pure-python wheels, no pip).
-        if getattr(sys, "frozen", False) and key in {"yt_dlp", "yt_dlp_ejs"}:
-            return True, ""
-        if getattr(sys, "frozen", False) and key in {"curl_cffi", "pyinstaller"}:
-            return False, self._t("در نسخهٔ EXE، این ابزار همراه نسخهٔ جدید LeonDL به‌روزرسانی می‌شود.")
+        if getattr(sys, "frozen", False) and key == "pyinstaller":
+            if not build_environment_python().is_file() and not build_python():
+                return False, self._t("برای مدیریت PyInstaller، Python را در Windows نصب و به PATH اضافه کنید.")
         if key in {"ffmpeg", "deno", "apkeep"} and os.name != "nt":
             return False, self._t("نصب خودکار این ابزار فقط در Windows در دسترس است.")
         if os.name == "nt" and key in {"ffmpeg", "deno"} and not shutil.which("winget"):
@@ -4000,7 +4084,6 @@ class MainWindow(QMainWindow):
         if not matching_indexes:
             return
 
-        self.preview_generation += 1
         for index in reversed(matching_indexes):
             card = self.preview_cards.pop(index)
             self.preview_list_layout.removeWidget(card)
@@ -4040,6 +4123,8 @@ class MainWindow(QMainWindow):
         self._clear_preview_cards()
         for index, url in enumerate(urls):
             card = PreviewItemCard(index, url, self.language, self.preview_host)
+            card.remove_requested.connect(self._remove_completed_download_input)
+            card.video_codec.currentIndexChanged.connect(self._recalculate_preview_sizes)
             self.preview_cards.append(card)
             self.preview_results.append({"state": "pending", "url": url, "info": {}, "error": ""})
             self.preview_list_layout.addWidget(card)
@@ -4094,11 +4179,38 @@ class MainWindow(QMainWindow):
             self.preview_inline_button.setEnabled(False)
             self.preview_inline_button.setText(self._t("در حال بررسی…"))
         self.preview_worker = PreviewWorker(urls, auth_options, manual_cookie_text, manual_cookie_domain, self.language)
-        self.preview_worker.item_started.connect(self._preview_item_started)
-        self.preview_worker.ready.connect(self._render_preview)
-        self.preview_worker.failed.connect(self._preview_failed)
+        self._preview_request_urls = tuple(urls)
+        self.preview_worker.item_started.connect(self._route_preview_started)
+        self.preview_worker.ready.connect(self._route_preview_ready)
+        self.preview_worker.failed.connect(self._route_preview_failed)
         self.preview_worker.finished.connect(self._preview_done)
         self.preview_worker.start()
+
+    def _preview_index(self, url: str) -> int:
+        return next((index for index, card in enumerate(self.preview_cards) if card.url == url), -1)
+
+    def _route_preview_started(self, index: int, total: int, url: str) -> None:
+        self._preview_item_started(self._preview_index(url), total, url)
+
+    def _route_preview_ready(self, index: int, info: dict[str, Any]) -> None:
+        self._render_preview(self._preview_index(self._preview_request_urls[index]), info)
+
+    def _route_preview_failed(self, index: int, message: str, url: str) -> None:
+        self._preview_failed(self._preview_index(url), message, url)
+
+    def _render_card_codecs(self, card: PreviewItemCard, info: dict[str, Any], choice: str = "") -> None:
+        combo = card.video_codec
+        previous = combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItem("Video codec: Auto" if self.language == "en" else "کدک ویدیو: خودکار", "")
+            choices = available_video_codecs(info)
+            for key in choices:
+                combo.addItem(VIDEO_CODECS[key][0], key)
+            combo.setCurrentIndex(max(0, combo.findData(choice)))
+            combo.setVisible(bool(choices))
+        finally:
+            combo.blockSignals(previous)
 
     def _preview_item_started(self, index: int, total: int, url: str) -> None:
         if not 0 <= index < len(self.preview_cards):
@@ -4132,6 +4244,7 @@ class MainWindow(QMainWindow):
         subtitle_languages = list(info.get("subtitle_languages") or [])
         self._render_card_subtitle_languages(card, subtitle_languages)
         self._merge_detected_subtitle_languages(subtitle_languages)
+        self._render_card_codecs(card, info)
         card.set_state("ready", self._t("آماده"))
         self.active_service_badge.setText(service)
         self.active_service_badge.setToolTip(domain or service)
@@ -4148,8 +4261,8 @@ class MainWindow(QMainWindow):
             generation = self.preview_generation
             self.thumbnail_workers.append(worker)
             worker.loaded.connect(
-                lambda data, item_index=index, batch_generation=generation:
-                self._set_preview_thumbnail(item_index, data, batch_generation)
+                lambda data, item_url=card.url, batch_generation=generation:
+                self._set_preview_thumbnail(self._preview_index(item_url), data, batch_generation)
             )
             worker.finished.connect(lambda active_worker=worker: self._thumbnail_worker_finished(active_worker))
             worker.start()
@@ -4396,7 +4509,13 @@ class MainWindow(QMainWindow):
         self.detail_label.setText(self._t("اتصال به سرویس و بررسی فرمت‌ها…"))
         self._append_log("—" * 45)
 
-        self.worker = DownloadWorker(urls, self._build_options(auth_options), manual_cookie_text, manual_cookie_domain, self.language)
+        options = self._build_options(auth_options)
+        if not self._combo_data(self.preset_combo, "auto").startswith("audio_"):
+            options["_leon_video_codecs"] = {
+                card.url: card.video_codec.currentData()
+                for card in self.preview_cards if card.video_codec.currentData() in VIDEO_CODECS
+            }
+        self.worker = DownloadWorker(urls, options, manual_cookie_text, manual_cookie_domain, self.language)
         self.worker.log.connect(self._append_log)
         self.worker.progress.connect(self._render_progress)
         self.worker.postprocess.connect(self._render_postprocess)
@@ -4459,6 +4578,7 @@ class MainWindow(QMainWindow):
             self.progress_bar.setRange(0, 1000)
             self.progress_bar.setValue(1000)
             self.progress_bar.setFormat(f"{self._digits(100)}%")
+            self._sync_web_progress()
             return
 
         self.status_label.setText(self._t("در حال دانلود"))
@@ -4472,6 +4592,7 @@ class MainWindow(QMainWindow):
             value_text = f"{float(percent):.1f}"
             self.progress_bar.setFormat(f"{self._digits(value_text)}%")
 
+        self._sync_web_progress()
         downloaded = human_bytes(data.get("downloaded"))
         total = human_bytes(data.get("total"))
         speed_text = str(data.get("speed_text") or "").strip()
@@ -4482,6 +4603,7 @@ class MainWindow(QMainWindow):
             eta_text = human_seconds(data.get("eta"))
         self.size_value.setText(f"{downloaded} / {total}")
         self.speed_value.setText(speed_text)
+        self._dashboard_speed = max(0, data.get("speed") or 0)
         if hasattr(self, "speed_wave"):
             self.speed_wave.set_speed(data.get("speed") or 0)
         self.eta_value.setText(eta_text)
@@ -4494,6 +4616,7 @@ class MainWindow(QMainWindow):
         self.progress_bar.setRange(0, 1000)
         self.progress_bar.setValue(1000)
         self.progress_bar.setFormat(f"{self._digits(100)}%")
+        self._sync_web_progress()
         self.status_label.setText(self._t("دانلود کامل شد"))
         self.detail_label.setText(self._t("فایل‌ها در پوشهٔ انتخاب‌شده ذخیره شدند."))
         self.eta_value.setText(self._t("تمام شد"))
@@ -4502,6 +4625,9 @@ class MainWindow(QMainWindow):
         self._mark_all_queue("✓")
         self._append_log(self._t("همهٔ دانلودها با موفقیت پایان یافتند."))
         self._mark_active_auth_success()
+        for url, received in getattr(self.worker, "received_by_url", {}).items():
+            if url in self._download_history_buffer:
+                self._download_history_buffer[url]["received_bytes"] = received
         history_entries = list(self._download_history_buffer.values())
         completed_entries = [
             item for item in history_entries
@@ -4615,9 +4741,11 @@ class MainWindow(QMainWindow):
         self.title_bar.language_button.setEnabled(not busy)
 
     def _reset_progress(self) -> None:
+        self._dashboard_speed = 0
         self.progress_bar.setRange(0, 1000)
         self.progress_bar.setValue(0)
         self.progress_bar.setFormat(f"{self._digits(0)}%")
+        self._sync_web_progress()
         self.size_value.setText("—")
         self.speed_value.setText("—")
         if hasattr(self, "speed_wave"):
@@ -5019,6 +5147,14 @@ class MainWindow(QMainWindow):
                 card.size.hide()
                 continue
             info = dict(result.get("info") or {})
+            if hasattr(card, "video_codec"):
+                card.video_codec.setEnabled(not preset_key.startswith("audio_"))
+                codec = card.video_codec.currentData()
+                if codec in VIDEO_CODECS and not preset_key.startswith("audio_"):
+                    pattern = VIDEO_CODECS[codec][1]
+                    info["formats"] = [fmt for fmt in info.get("formats", [])
+                                       if str(fmt.get("vcodec") or "none") == "none"
+                                       or re.search(pattern, str(fmt["vcodec"]), re.IGNORECASE)]
             estimate = estimate_selected_media_size(info, preset_key, audio_language)
             result["size_estimate"] = estimate
             text, tooltip = self._format_preview_size_text(estimate)
@@ -5066,7 +5202,21 @@ class MainWindow(QMainWindow):
         volume = volume_control.value() if volume_control is not None else DEFAULT_VOLUME
         player.configure(theme=theme, volume=volume, custom_paths=self._sound_custom_paths())
 
+    def _sync_web_progress(self) -> None:
+        view = getattr(self, "web_progress", None)
+        if view is not None:
+            maximum = self.progress_bar.maximum()
+            view.set_state(percent=self.progress_bar.value() * 100 / maximum if maximum else None,
+                           text=self.progress_bar.format(), label=self.status_label.text())
+
+    def _sync_web_volume(self) -> None:
+        view = getattr(self, "web_volume", None)
+        if view is not None:
+            view.set_state(value=self.sound_volume_slider.value(),
+                           disabled=not self.sound_enabled_check.isChecked(), label=self._t("بلندی صدا"))
+
     def _sound_volume_changed(self, value: int) -> None:
+        self._sync_web_volume()
         if hasattr(self, "sound_volume_value"):
             self.sound_volume_value.setText(f"{int(value)}%")
         self._configure_sound_player()
@@ -5478,6 +5628,12 @@ class MainWindow(QMainWindow):
         event.accept()
 
     def _download_thread_finished(self) -> None:
+        received = sum(getattr(self.worker, "received_by_url", {}).values())
+        try:
+            self.history_store.add_received_bytes(received)
+        except OSError as exc:
+            self._append_log(str(exc))
+        self._refresh_history_table()
         self._set_busy(False)
         self._download_cancel_requested = False
         self._forced_close_scheduled = False

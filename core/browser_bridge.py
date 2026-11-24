@@ -25,6 +25,7 @@ from typing import Any, BinaryIO
 from urllib.parse import urlparse
 
 from core.auth_store import AuthProfileStore, service_domain
+from core.theme_tokens import normalize_theme_name
 
 APP_NAME = "LeonDL"
 HOST_NAME = "com.leon_downloader.bridge"
@@ -519,6 +520,16 @@ def _start_gui_if_needed() -> bool:
         return False
 
 
+def _desktop_theme() -> str:
+    try:
+        settings = json.loads((CONFIG_DIR / "settings.json").read_text(encoding="utf-8"))
+        if isinstance(settings, dict) and isinstance(settings.get("theme"), str):
+            return normalize_theme_name(settings["theme"])
+    except (OSError, ValueError):
+        pass
+    return "youtube"
+
+
 def _handle_native_message(message: dict[str, Any]) -> dict[str, Any]:
     supplied_token = str(message.get("pairingToken") or "")
     expected_token = pairing_token()
@@ -526,7 +537,7 @@ def _handle_native_message(message: dict[str, Any]) -> dict[str, Any]:
         raise BrowserBridgeError("Pairing code is missing or invalid.")
     message_type = str(message.get("type") or "submit")
     if message_type == "ping":
-        return {"ok": True, "version": 1, "app": APP_NAME}
+        return {"ok": True, "version": 1, "app": APP_NAME, "theme": _desktop_theme()}
     if message_type != "submit":
         raise BrowserBridgeError("Unsupported bridge message type.")
     action = str(message.get("action") or "open")

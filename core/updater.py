@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QThread, Signal
+from core.workers import Worker, Signal
 
 GITHUB_REPO = "LeonAmir/LeonDL"
 RELEASE_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
@@ -34,7 +34,7 @@ STAGING_DIR_NAME = "_update_staging"
 APPLIER_VBS_NAME = "apply_update.vbs"
 APPLIER_MARKER_NAME = "apply_update.marker"
 APPLY_LOG_NAME = "_update_log.txt"
-FALLBACK_VERSION = "2.7.0"
+FALLBACK_VERSION = "2.7.1"
 
 
 class UpdaterError(RuntimeError):
@@ -326,7 +326,7 @@ def discard_staged_update(staging: Path) -> None:
     shutil.rmtree(staging, ignore_errors=True)
 
 
-class UpdateCheckWorker(QThread):
+class UpdateCheckWorker(Worker):
     """Queries GitHub for the latest published release (fast, no download)."""
 
     checked = Signal(bool, object, str)  # ok, ReleaseInfo | None, error message
@@ -343,7 +343,7 @@ class UpdateCheckWorker(QThread):
         self.checked.emit(True, release, "")
 
 
-class UpdateDownloadWorker(QThread):
+class UpdateDownloadWorker(Worker):
     """Downloads, verifies and stages the next build (frozen builds only)."""
 
     progress = Signal(int, int)  # received, total

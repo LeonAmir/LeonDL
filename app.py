@@ -18,24 +18,24 @@ def _native_host_mode() -> bool:
 # Native Messaging must own stdout from the first byte. Dispatch before runtime
 # logging, bootstrap, Qt, or any dependency that could print to the protocol.
 if _native_host_mode():
-    # Engines must resolve before the bridge imports yt-dlp-backed modules.
-    from core.engine_loader import activate_engines
-
-    activate_engines()
     from core.browser_bridge import run_native_host
 
     raise SystemExit(run_native_host(sys.argv))
 
 
-# Prefer the updatable engine directory (see core/engine_loader.py) over the
-# copy bundled inside the frozen EXE, so in-app yt-dlp updates actually apply.
-from core.engine_loader import activate_engines as _activate_engines
+if getattr(sys, "frozen", False):
+    from core.engine_update import activate_engine, activate_extra_engines, probe_engine, probe_extra
 
-_ENGINES_ROOT = _activate_engines()
+    if len(sys.argv) in {3, 4} and sys.argv[1] == "--leondl-engine-probe":
+        root = Path(sys.argv[2])
+        raise SystemExit(probe_extra(root, sys.argv[3]) if len(sys.argv) == 4 else probe_engine(root))
+    activate_engine()
+    activate_extra_engines()
+
 
 from bootstrap import SetupReport, ensure_environment
 
-APP_VERSION = "2.7.0"
+APP_VERSION = "2.7.1"
 
 
 def _install_runtime_logging() -> None:
@@ -75,141 +75,50 @@ if not _SETUP_REPORT.python_ok or not _SETUP_REPORT.python_packages_ok:
     missing = ", ".join(_SETUP_REPORT.missing) or "Python requirements"
     raise SystemExit(f"LeonDL could not prepare its Python environment: {missing}")
 
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QFont, QFontDatabase, QIcon
-from PySide6.QtWidgets import QApplication, QMessageBox
-
-from ui.splash import StartupSplash
-from ui.theme import theme_from_name
-
-
-def _apply_application_font(app: QApplication) -> str:
-    """Prefer Vazir without bundling or exposing a font file."""
-    available = set(QFontDatabase.families())
-    for family in ("Vazir", "Vazirmatn", "Tahoma", "Segoe UI"):
-        if family in available:
-            font = QFont(family)
-            font.setPointSizeF(10.0)
-            app.setFont(font)
-            return family
-    return app.font().family()
-
-
-def _initial_settings() -> dict[str, Any]:
-    try:
-        payload = json.loads((Path.home() / ".yt_dlp_liquid" / "settings.json").read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
-
-
-def _initial_language(settings: dict[str, Any] | None = None) -> str:
-    payload = settings if settings is not None else _initial_settings()
-    return "en" if str(payload.get("language") or "fa").lower() == "en" else "fa"
-
-
-def _show_setup_result(window: Any) -> None:
-    if _SETUP_REPORT.installed:
-        prefix = "Dependencies ready: " if window.language == "en" else "پیش‌نیازها آماده شدند: "
-        separator = ", " if window.language == "en" else "، "
-        window.toast.show_message(prefix + separator.join(_SETUP_REPORT.installed), duration_ms=4200)
-    if _SETUP_REPORT.missing:
-        QMessageBox.warning(
-            window,
-            "بررسی پیش‌نیازها",
-            "برخی پیش‌نیازهای جانبی هنوز در دسترس نیستند:\n\n"
-            + "\n".join(f"• {item}" for item in _SETUP_REPORT.missing)
-            + "\n\nفایل setup_windows.bat را اجرا کنید یا نصب را از مدیریت پکیج‌ها انجام دهید.",
-        )
-
-
-def _signal_launcher_ready() -> None:
-    ready_file = str(os.environ.get("LEON_READY_FILE") or "").strip()
-    if not ready_file:
-        return
-    try:
-        Path(ready_file).write_text("ready", encoding="utf-8")
-    except OSError:
-        pass
-
-
-def _start_prerequisite_worker(window: Any) -> None:
-    """Frozen builds bundle Python packages but need FFmpeg/FFprobe/Deno as
-    external tools. Check for them in the background and install what is
-    missing through WinGet, without blocking the visible window."""
-    from core.package_manager import PrerequisiteWorker
-
-    worker = PrerequisiteWorker()
-    # Keep a strong reference so Python GC cannot destroy the running thread.
-    window._prerequisite_worker = worker
-
-    def on_log(text: str) -> None:
-        if hasattr(window, "_append_log"):
-            window._append_log(text)
-
-    def on_done(installed: list[str], failed: list[str]) -> None:
-        if installed:
-            if window.language == "en":
-                message = "Prerequisites ready: " + ", ".join(installed)
-            else:
-                message = "پیش‌نیازها آماده شدند: " + "، ".join(installed)
-            window.toast.show_message(message, duration_ms=4200)
-        if failed:
-            if window.language == "en":
-                note = "Some prerequisites could not be installed: " + ", ".join(failed)
-            else:
-                note = "برخی پیش‌نیازها نصب نشدند: " + "، ".join(failed)
-            window._append_log(note)
-
-    worker.log.connect(on_log)
-    worker.done.connect(on_done)
-    worker.start()
-
-
 def main() -> int:
-    QApplication.setHighDpiScaleFactorRoundingPolicy(Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-    app = QApplication(sys.argv)
-    app.setApplicationName("LeonDL")
-    app.setOrganizationName("LeonDL")
-    app.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
-    _apply_application_font(app)
+    import base64
+    import webview
 
-    icon_path = Path(__file__).resolve().parent / "assets" / "app_icon.png"
-    if icon_path.exists():
-        app.setWindowIcon(QIcon(str(icon_path)))
+    from core import browser_bridge
+    from core.desktop import Desktop
 
-    initial_settings = _initial_settings()
-    initial_language = _initial_language(initial_settings)
-    initial_theme = theme_from_name(str(initial_settings.get("theme") or "youtube"))
-    external_splash = os.environ.get("LEON_EXTERNAL_SPLASH") == "1"
-    splash: StartupSplash | None = None
-    if not external_splash:
-        splash = StartupSplash(APP_VERSION, initial_language, initial_theme)
-        splash.show()
-        splash.set_status("Loading interface…" if initial_language == "en" else "در حال بارگذاری رابط…")
-        app.processEvents()
+    if sys.platform == "win32":
+        from webview.platforms import winforms
 
-    # Importing the full UI after the splash is visible keeps frozen and direct
-    # Python launches responsive while the large window module is initialized.
-    from ui.window import MainWindow
+        if not winforms.is_chromium:
+            import ctypes
 
-    if splash:
-        splash.set_status("Preparing workspace…" if initial_language == "en" else "در حال آماده‌سازی فضای کار…")
-        app.processEvents()
+            ctypes.windll.user32.MessageBoxW(
+                None, "Microsoft Edge WebView2 Runtime is required to open LeonDL.",
+                "LeonDL", 0x10,
+            )
+            return 1
 
-    window = MainWindow()
-    window.show()
-    app.processEvents()
-    _signal_launcher_ready()
-    if getattr(sys, "frozen", False):
-        # EXE builds: verify/install external prerequisites in the background.
-        _start_prerequisite_worker(window)
-    if splash:
-        splash.finish(window)
+    root = Path(__file__).resolve().parent / "assets"
+    web = root / "web"
+    html = (web / "index.html").read_text(encoding="utf-8")
+    css = (web / "app.css").read_text(encoding="utf-8")
+    script = (web / "app.js").read_text(encoding="utf-8-sig")
+    icon = "data:image/png;base64," + base64.b64encode((web / "icon.png").read_bytes()).decode("ascii")
+    html = html.replace("__STYLE__", css).replace("__SCRIPT__", script).replace("__ICON__", icon)
+    desktop = Desktop(APP_VERSION)
+    window = webview.create_window(f"LeonDL {APP_VERSION}", html=html, js_api=desktop,
+                                   width=1300, height=900, min_size=(760, 560), frameless=False,
+                                   text_select=True, background_color="#101424")
+    desktop._window = window
 
-    if _SETUP_REPORT.installed or _SETUP_REPORT.missing:
-        QTimer.singleShot(650, lambda: _show_setup_result(window))
-    return app.exec()
+    def closing():
+        worker = desktop._worker
+        if worker and worker.isRunning() and not desktop._allowed_close:
+            desktop._request_close_confirmation()
+            return False
+        return True
+
+    window.events.closing += closing
+    window.events.closed += browser_bridge.clear_app_heartbeat
+    webview.start(gui="edgechromium" if sys.platform == "win32" else None, private_mode=True,
+                  icon=str(root / "app_icon.ico"))
+    return 0
 
 
 if __name__ == "__main__":

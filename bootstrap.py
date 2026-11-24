@@ -3,7 +3,7 @@ from __future__ import annotations
 """Dependency checker/installer for LeonDL.
 
 This module deliberately uses only Python's standard library so it can run in a
-fresh virtual environment before PySide6 and yt-dlp are installed.
+fresh virtual environment before pywebview and yt-dlp are installed.
 """
 
 import argparse
@@ -30,16 +30,18 @@ MIN_DENO = (2, 3, 0)
 
 # distribution-name: import-name (None means distribution metadata is enough)
 PYTHON_REQUIREMENTS: dict[str, str | None] = {
-    "PySide6": "PySide6",
+    "pywebview": "webview",
     "yt-dlp": "yt_dlp",
     "yt-dlp-ejs": None,
     "curl-cffi": "curl_cffi",
+    "packaging": "packaging",
 }
 
 MIN_DISTRIBUTION_VERSIONS: dict[str, tuple[int, ...]] = {
-    "PySide6": (6, 7),
+    "pywebview": (6, 0),
     "yt-dlp": (2026, 6, 9),
     "curl-cffi": (0, 13),
+    "packaging": (24,),
 }
 
 
