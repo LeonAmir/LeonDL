@@ -60,10 +60,17 @@ function portfolio(media,remove=false){
  if(media.error)body.append(text(media.error));
  if(remove&&(media.audio_languages||[]).length)body.append(n('small',t('Audio','صدا')+': '+media.audio_languages.map(item=>item.label||item.name||item.code).filter(Boolean).slice(0,5).join(', '),'muted'));
  if(remove&&(media.subtitle_languages||[]).length)body.append(n('small',t('Subtitles','زیرنویس')+': '+media.subtitle_languages.map(item=>item.label||item.name||item.code).filter(Boolean).slice(0,5).join(', '),'muted'));
- if(remove&&media.estimate)body.append(n('small',t('Estimated size','حجم تخمینی')+' '+bytes(media.estimate),'muted'));
+ const sizeLabel=n('small',null,'muted');
+ const updateSize=()=>{
+  const codec=state.settings.preset.startsWith('audio_')?'':(codecs[media.url]||'');
+  const size=media.sizes?.[codec];
+  sizeLabel.textContent=size?.bytes==null?t('Size unavailable','حجم نامشخص'):
+   (size.confidence==='exact'?t('Exact stream size','حجم دقیق استریم'):t('Estimated size','حجم تخمینی'))+' · '+bytes(size.bytes);
+ };
+ if(remove&&media.sizes){updateSize();body.append(sizeLabel)}
  if(remove&&(media.codecs||[]).length){
   const options=[['',t('Automatic','خودکار')],...media.codecs.map(key=>[key,state.codecs[key]])];
-  const codec=select(options,codecs[media.url]||'',value=>codecs[media.url]=value);
+  const codec=select(options,codecs[media.url]||'',value=>{codecs[media.url]=value;updateSize()});
   codec.disabled=state.settings.preset.startsWith('audio_');
   body.append(field(t('Video codec','کدک ویدیو'),codec));
  }
@@ -77,6 +84,21 @@ function preview(){
  for(const item of state.preview)list.append(portfolio(item,true));
  if(!state.preview.length)list.append(text(t('Links will appear here after preview.','پس از پیش‌نمایش، لینک‌ها اینجا نمایش داده می‌شوند.')));
  return list;
+}
+function previewSection(previews){
+ const card=section(t('Preview','پیش‌نمایش'),previews);
+ const heading=card.firstChild;
+ heading.classList.add('preview-heading');
+ heading.append(n('span',null,'progress-chip'));
+ heading.lastChild.id='preview-count';
+ updatePreviewCount(heading.lastChild);
+ return card;
+}
+function updatePreviewCount(badge){
+ const count=state.preview.length;
+ badge.hidden=!count;
+ badge.textContent=count.toLocaleString(t('en','fa'));
+ badge.setAttribute('aria-label',t('Preview count','تعداد پیش‌نمایش‌ها')+' '+badge.textContent);
 }
 function progress(){
  const data=state.progress;
@@ -110,7 +132,7 @@ function download(){
  const status=progress();status.id='progress-block';
  grid.append(section(t('Links','لینک‌ها'),editor,row(previewButton,button(t('Paste','چسباندن'),paste),button(t('Clear','پاک‌کردن'),()=>changeLinks('')),button(t('Add to Queue','افزودن به صف'),()=>editorAction('queue_add')))),
   section(t('Download options','گزینه‌های دانلود'),formats,row(startButton,cancelButton,button(t('Open folder','بازکردن پوشه'),()=>api('open_folder')),button(t('Settings','تنظیمات'),()=>setPage('settings')))),
-  section(t('Preview','پیش‌نمایش'),previews),section(t('Download progress','پیشرفت دانلود'),status));
+  previewSection(previews),section(t('Download progress','پیشرفت دانلود'),status));
  const current=n('div',null,'list');current.id='active-queue';
  return append(n('div',null,'page-block'),grid,section(t('Current queue','صف فعلی'),current,button(t('Open queue','بازکردن صف'),()=>setPage('queue'))));
 }
@@ -184,7 +206,7 @@ function soundSettings(){
  }
  return section(t('Sound settings','تنظیم صدا'),
   setting('sound_enabled',t('Enable app sounds','فعال‌بودن صداهای برنامه'),null,'checkbox'),
-  setting('sound_theme',t('Sound pack','بستهٔ صدا'),[['gentle',t('Gentle & pleasant','ملایم و دلنشین')],['system',t('System sounds','صدای سیستم')]]),
+  setting('sound_theme',t('Sound pack','بستهٔ صدا'),[['gentle',t('LeonDL sounds','صداهای LeonDL')],['system',t('System sounds','صدای سیستم')]]),
   append(n('div',null,'sound-volume'),field(t('Volume','بلندی صدا'),line)),events,
   row(button(t('Clear custom sounds','پاک‌کردن صداهای سفارشی'),async()=>{await save('sound_custom',{});render(true)})));
 }
@@ -212,10 +234,12 @@ function settings(){
  const sound=soundSettings();sound.classList.add('sound-controls');grid.append(sound);return grid;
 }
 function packagePage(){
- const labels=[t('Package','بسته'),t('Version','نسخه'),t('Path','مسیر'),t('Action','عملیات')];
- const items=state.packages.map(item=>[item.name,item.version||'—',item.path||'—',button(item.installed?t('Update','به‌روزرسانی'):t('Install','نصب'),()=>api('package',{key:item.key,installed:item.installed}))]);
- for(const item of items)item[3].disabled=state.packageBusy;
- return section(t('Packages and tools','بسته‌ها و ابزارها'),row(button(t('Check system','بررسی سیستم'),()=>api('packages'),'primary')),table(labels,items),section(t('Package log','گزارش بسته‌ها'),n('pre',state.logs.slice(-25).join('\n'),'log-box')));
+ const labels=[t('Package','بسته'),t('Version','نسخه'),t('Action','عملیات')];
+ const items=state.packages.map(item=>[item.name,item.version||'—',button(item.installed?t('Update','به‌روزرسانی'):t('Install','نصب'),()=>api('package',{key:item.key,installed:item.installed}))]);
+ for(const item of items)item[2].disabled=state.packageBusy;
+ const packageTable=table(labels,items);
+ packageTable.classList.add('package-table');
+ return section(t('Packages and tools','بسته‌ها و ابزارها'),row(button(t('Check system','بررسی سیستم'),()=>api('packages'),'primary')),packageTable,section(t('Package log','گزارش بسته‌ها'),n('pre',state.logs.slice(-25).join('\n'),'log-box')));
 }
 function browser(){
  const info=bridge.bridge||{};
@@ -251,6 +275,7 @@ function render(force=false){
   const fingerprint=JSON.stringify([state.preview,state.settings.preset,state.settings.audio_language,state.settings.subtitle_language,state.settings.output_dir]);
   if(render.preview!==fingerprint||fresh){
    render.preview=fingerprint;
+   updatePreviewCount(get('preview-count'));
    get('preview-block').replaceChildren(...preview().childNodes);
    if(!get('options-block').contains(document.activeElement)){
     const options=download().querySelector('#options-block');get('options-block').replaceChildren(...options.childNodes);

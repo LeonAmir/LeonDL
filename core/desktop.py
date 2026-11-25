@@ -26,13 +26,23 @@ from core.later_store import LaterStore
 from core.package_manager import PackageActionWorker, PackageStatusWorker, PrerequisiteWorker
 from core.search import SEARCH_SERVICES, SearchWorker
 from core.sound_events import (
-    DEFAULT_SOUND_THEME, DEFAULT_VOLUME, SOUND_EVENTS, download_internet_sound_asset,
-    gentle_sound_path, play_system_sound, resolve_sound_path,
+    DEFAULT_SOUND_THEME, DEFAULT_VOLUME, SOUND_EVENTS,
+    play_system_sound, resolve_sound_path,
 )
 from core.theme_tokens import THEME_TOKENS, normalize_theme_name
 from core.updater import UpdateCheckWorker, UpdateDownloadWorker, compare_versions, launch_applier
 
 CONFIG = Path.home() / ".yt_dlp_liquid"
+_EVENT_AUDIO = {
+    "error": "error.mp3",
+    "cancelled": "error.mp3",
+    "warning": "windows_xp_hardware.mp3",
+    "notification": "ballon.mp3",
+    "download_complete": "windows_xp_notify.mp3",
+    "queue_complete": "windows_xp_notify.mp3",
+}
+
+
 DEFAULTS = {
     "output_dir": str(Path.home() / "Downloads"), "language": "fa", "theme": "youtube",
     "preset": "auto", "audio_language": "", "subtitle_language": "all", "fragments": 4,
@@ -394,13 +404,10 @@ class Desktop:
         volume = s["sound_volume"] / 100
 
         def prepare():
-            path = resolve_sound_path(theme, event, paths)
+            # Resolve custom files without loading a cached copy of the old default pack.
+            path = resolve_sound_path("system", event, paths)
             if path is None and theme == "gentle":
-                from core.sound_events import GENTLE_EVENT_ASSET
-                key = GENTLE_EVENT_ASSET.get(event)
-                if key:
-                    download_internet_sound_asset(key)
-                path = gentle_sound_path(event)
+                path = Path(__file__).resolve().parents[1] / "assets" / "sounds" / "events" / _EVENT_AUDIO[event]
             if path is None:
                 if theme == "system":
                     play_system_sound(event)
@@ -454,8 +461,17 @@ class Desktop:
                 tiny = {k: card[k] for k in ("url", "title", "status", "service", "duration", "thumbnail",
                                              "error", "codecs", "audio_languages", "subtitle_languages") if k in card}
                 if card.get("status") == "ready":
-                    tiny["estimate"] = estimate_selected_media_size(card, self._settings["preset"],
-                                                                     self._settings["audio_language"]).get("bytes")
+                    preset = self._settings["preset"]
+                    audio = self._settings["audio_language"]
+                    key = (preset, audio)
+                    if card.get("_size_key") != key:
+                        codecs = [] if preset.startswith("audio_") else card["codecs"]
+                        card["_sizes"] = {
+                            codec: estimate_selected_media_size(card, preset, audio, video_codec=codec)
+                            for codec in ["", *codecs]
+                        }
+                        card["_size_key"] = key
+                    tiny["sizes"] = card["_sizes"]
                 cards.append(tiny)
             state = {
                 "version": self._version, "settings": {key: self._settings[key] for key in DEFAULTS},

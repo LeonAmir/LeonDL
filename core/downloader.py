@@ -687,6 +687,8 @@ def estimate_selected_media_size(
     info: dict[str, Any] | None,
     preset_key: str = "auto",
     audio_language: str = "",
+    *,
+    video_codec: str = "",
 ) -> dict[str, Any]:
     """Estimate bytes downloaded for the current preset without network access.
 
@@ -710,6 +712,10 @@ def estimate_selected_media_size(
     audio_only_mode = preset_key.startswith("audio_")
     prefer_mp4 = preset_key == "mp4_best" or cap is not None
     prefer_m4a = preset_key == "audio_m4a" or prefer_mp4
+    if video_codec in VIDEO_CODECS and not audio_only_mode:
+        pattern = VIDEO_CODECS[video_codec][1]
+        formats = [fmt for fmt in formats if not has_video(fmt)
+                   or re.search(pattern, str(fmt["vcodec"]), re.IGNORECASE)]
 
     audio_formats = [fmt for fmt in formats if has_audio(fmt) and not has_video(fmt)]
     combined_formats = [fmt for fmt in formats if has_audio(fmt) and has_video(fmt)]
@@ -747,7 +753,8 @@ def estimate_selected_media_size(
             elif audio is not None:
                 selected = [audio]
 
-    if not selected:
+    if not selected or (video_codec in VIDEO_CODECS and not audio_only_mode and
+                        not any(has_video(fmt) for fmt in selected)):
         return {"bytes": None, "confidence": "unknown", "components": [], "selected_ids": []}
 
     total = 0

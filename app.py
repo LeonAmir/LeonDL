@@ -35,7 +35,7 @@ if getattr(sys, "frozen", False):
 
 from bootstrap import SetupReport, ensure_environment
 
-APP_VERSION = "2.7.1"
+APP_VERSION = "2.7.2"
 
 
 def _install_runtime_logging() -> None:
@@ -98,6 +98,12 @@ def main() -> int:
     web = root / "web"
     html = (web / "index.html").read_text(encoding="utf-8")
     css = (web / "app.css").read_text(encoding="utf-8")
+    for face, weight in (("Regular", 400), ("Bold", 700)):
+        font = base64.b64encode((web / "fonts" / f"Vazir-{face}.woff2").read_bytes()).decode("ascii")
+        css += (
+            f"@font-face{{font-family:Vazir;src:url(data:font/woff2;base64,{font}) "
+            f"format('woff2');font-weight:{weight};font-display:swap}}"
+        )
     script = (web / "app.js").read_text(encoding="utf-8-sig")
     icon = "data:image/png;base64," + base64.b64encode((web / "icon.png").read_bytes()).decode("ascii")
     html = html.replace("__STYLE__", css).replace("__SCRIPT__", script).replace("__ICON__", icon)
